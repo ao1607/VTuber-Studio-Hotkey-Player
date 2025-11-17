@@ -15,6 +15,7 @@ python -m venv .venv
 .\.venv\Scripts\activate
 pip install -r requirements.txt
 ```
+※exeファイルをダウンロードでインストールせずに実行&使用できます。
 
 ## 実行
 
