@@ -11,16 +11,14 @@ GUIでタイムライン (キー押下/一時停止/フラグ) を編集し、�
 ## インストール (仮想環境推奨)
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\activate
 pip install -r requirements.txt
 ```
-※exeファイルをダウンロードでインストールせずに実行&使用できます。
+※exeファイルをダウンロードし使用することで、インストールせずにそのまま実行&使用できます。
 
 ## 実行
 
 ```powershell
-python .\python_scripts\main.py
+python ./main.py
 ```
 
 ## バンドルZIP構造
