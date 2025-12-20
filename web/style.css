@@ -312,18 +312,85 @@ input, select {
 
 .log-panel {
     flex: 1;
-    background: #111;
+    /* Windows Terminalのデフォルト背景色に近い色 + 透過 */
+    background: rgba(12, 12, 12, 0.85); 
+    /* すりガラス効果（アクリル） */
+    backdrop-filter: blur(10px); 
+    border: 1px solid #333;
     border-radius: 8px;
-    padding: 10px;
     display: flex;
     flex-direction: column;
+    overflow: hidden; /* 角丸からはみ出さないように */
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
 }
+
+.log-panel h3 {
+    margin: 0;
+    padding: 8px 15px;
+    background: rgba(255, 255, 255, 0.05); /* タブバーっぽい薄い背景 */
+    font-size: 0.85rem;
+    color: #fff;
+    border-bottom: 1px solid #333;
+    font-family: 'Segoe UI', sans-serif; /* ヘッダーはUIフォントで */
+    display: flex;
+    align-items: center;
+}
+/* 左上のアイコンっぽさを出す装飾 */
+.log-panel h3::before {
+    content: '>_';
+    margin-right: 8px;
+    color: #89b4fa;
+    font-weight: bold;
+}
+
 #log-box {
     flex: 1;
     overflow-y: auto;
-    font-family: monospace;
+    padding: 10px 15px;
+    
+    /* ターミナルフォント指定 */
+    font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
     font-size: 0.9rem;
-    color: #ccc;
+    color: #cccccc; /* 標準テキスト色 */
+    line-height: 1.4;
+}
+
+/* ログの各行のアニメーション */
+#log-box div {
+    animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* タイムスタンプの色（シアン） */
+.log-time {
+    color: #61d6d6; 
+    margin-right: 8px;
+}
+
+/* プロンプトの色（緑） */
+.log-prompt {
+    color: #16c60c;
+    margin-right: 5px;
+    font-weight: bold;
+}
+
+/* ターミナル風スクロールバー */
+#log-box::-webkit-scrollbar {
+    width: 8px;
+}
+#log-box::-webkit-scrollbar-track {
+    background: transparent;
+}
+#log-box::-webkit-scrollbar-thumb {
+    background-color: #444;
+    border-radius: 4px;
+}
+#log-box::-webkit-scrollbar-thumb:hover {
+    background-color: #555;
 }
 
 footer {

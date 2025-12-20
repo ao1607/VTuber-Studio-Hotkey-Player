@@ -6,6 +6,7 @@ let wavesurfer = null; // 波形表示用の WaveSurfer インスタンス
 let isPlaying = false; // 再生中かどうかのフラグ
 let isPaused = false;  // 一時停止中かどうかのフラグ
 let pausedAt = 0;    // 一時停止した時刻（再開時に使用）
+let nextEventIndex = 0; // 次に発火すべきイベントのインデックス
 
 // ズームレベル管理
 let currentZoom = 0;
@@ -24,9 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
         backend: 'WebAudio',
         minPxPerSec: 0, // 最初は全体表示
         autoCenter: false, // 勝手にスクロールされると邪魔なのでOFF
+        dragToSeek: true  // クリック＆ドラッグでシーク可能に
     });
 
-    wavesurfer.setVolume(0); // 音量を 0 に設定（再生時の音声は Python 側で扱うため）
+    wavesurfer.setVolume(1.0); // 音量を 1.0 に設定
     wavesurfer.on('ready', () => {
         js_log("波形の生成が完了しました。");
         hideLoading();      // モーダルを消す
@@ -40,10 +42,74 @@ document.addEventListener('DOMContentLoaded', () => {
         alert("波形の読み込みに失敗しましたの...");
     });    
     // ダブルクリックでイベントを自動追加する（必要ならコメント解除）
-    
-    wavesurfer.on('dblclick', () => {
-        addEvent(); // 現在入力されている時刻（直前のクリックでセット済）で追加
+
+    // 1. 時間表示の更新 (再生中もドラッグ中も常に動く 'timeupdate' を使う)
+    wavesurfer.on('timeupdate', (currentTime) => {
+        document.getElementById('time-display').textContent = currentTime.toFixed(3) + "s";
     });
+
+    // 2. イベントの発火チェック (これは再生中のみ動く 'audioprocess' のままでOK)
+    wavesurfer.on('audioprocess', (currentTime) => {
+        // 時間表示更新
+        document.getElementById('time-display').textContent = currentTime.toFixed(3) + "s";
+
+        // まだ発火していないイベントがあり、かつその時間が来た場合
+        while (nextEventIndex < events.length) {
+            const ev = events[nextEventIndex];
+            
+            // イベントの時間が現在時刻より「前」なら発火（少しのズレも許容）
+            if (ev.time <= currentTime) {
+                // "pause" タイプはJS側で制御
+                if (ev.type === 'pause') {
+                    wavesurfer.pause();
+                    updateToggleIcon(false);
+                    js_log(`Paused at ${ev.time.toFixed(2)}s`);
+                } 
+                // "press" タイプはPythonへ命令
+                else if (ev.type === 'press') {
+                    js_log(`Key: ${ev.key} at ${currentTime.toFixed(2)}s`);
+                    eel.trigger_hotkey_py(ev.key)(); // Pythonを呼び出し
+                }
+                
+                nextEventIndex++; // 次のイベントへ
+            } else {
+                // まだ時間が来ていないイベントならループを抜ける
+                break; 
+            }
+        }
+    });
+
+
+
+    // シーク（手動移動）した時の処理
+    wavesurfer.on('seek', () => {
+        const currentTime = wavesurfer.getCurrentTime();
+        document.getElementById('time-display').textContent = currentTime.toFixed(3) + "s";
+        
+        // 再生位置が変わったので、nextEventIndex を再計算
+        // 「現在時刻より未来にある最初のイベント」を探す
+        nextEventIndex = 0;
+        for (let i = 0; i < events.length; i++) {
+            if (events[i].time > currentTime) {
+                nextEventIndex = i;
+                break;
+            }
+            // 最後まで行ったら index は events.length になる
+            if (i === events.length - 1) {
+                nextEventIndex = events.length;
+            }
+        }
+        // js_log(`Seeked to ${currentTime.toFixed(2)}s. Next Event Index: ${nextEventIndex}`);
+    });
+
+    // 再生終了時
+    wavesurfer.on('finish', () => {
+        updateToggleIcon(false);
+        nextEventIndex = 0; // 最初に戻す
+        wavesurfer.seekTo(0);
+        js_log("再生終了");
+    });
+
 
     setUIEnabled(false); // 初期状態ではUIを無効化
 
@@ -53,8 +119,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     waveformContainer.addEventListener('wheel', (e) => {
         // 音声が読み込まれていないときは何もしない
-        if (!wavesurfer || totalDuration === 0) return;
-
+        if (!wavesurfer || wavesurfer.getDuration() === 0) return;
+        
         // Shiftキー + ホイール = ズーム (拡大縮小)
         if (e.shiftKey) {
             e.preventDefault(); // ブラウザ標準の戻る/進むなどをキャンセル
@@ -124,47 +190,19 @@ eel.expose(js_log);
 function js_log(msg) {
     const box = document.getElementById('log-box');
     const line = document.createElement('div');
-    line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    
+    const timeStr = new Date().toLocaleTimeString();
+    
+    // HTMLで色付けして流し込む
+    // 「PS > [時刻] メッセージ」の形式にする
+    line.innerHTML = `
+        <span class="log-prompt">></span>
+        <span class="log-time">[${timeStr}]</span>
+        <span>${msg}</span>
+    `;
+    
     box.appendChild(line);
     box.scrollTop = box.scrollHeight;
-}
-
-eel.expose(js_set_duration);
-function js_set_duration(duration) {
-    totalDuration = duration;
-    js_log("Total Duration set to: " + duration.toFixed(2) + "s");
-}
-
-eel.expose(js_update_progress);
-function js_update_progress(currentTime) {
-    document.getElementById('time-display').textContent = currentTime.toFixed(3) + "s";
-    
-    if (totalDuration > 0 && wavesurfer) {
-        // 再生中はPythonがマスターなので、波形側はシークするだけ（音は出さない）
-        if (!wavesurfer.isPlaying()) {
-            // 0.0 ~ 1.0 の割合で指定
-            let ratio = currentTime / totalDuration;
-            // 念のため範囲制限
-            if (ratio < 0) ratio = 0;
-            if (ratio > 1) ratio = 1;
-            
-            wavesurfer.seekTo(ratio);
-        }
-    }
-}
-
-
-eel.expose(js_on_stop);
-// 再生停止時に呼ばれる（Python から呼び出される）
-function js_on_stop() {
-    isPlaying = false;
-    isPaused = false;
-    updateToggleIcon(false); // Playアイコンに戻す
-    
-    document.getElementById('btn-play').disabled = false;
-    document.getElementById('btn-stop').disabled = true;
-    if (wavesurfer) wavesurfer.seekTo(0);
-    js_log("Stopped.");
 }
 
 // --- UI操作 ---
@@ -274,54 +312,21 @@ function toggleInput() {
 
 // ▼▼▼ トグルボタンのロジック ▼▼▼
 async function togglePlayback() {
-    const btn = document.getElementById('btn-toggle');
-    let offset = 0;
-    if (wavesurfer) {
-        offset = wavesurfer.getCurrentTime();
-    }
-    
-    // ケース1: まだ再生していない（停止状態）→ 再生開始
-    if (!isPlaying && !isPaused) {
-        isPlaying = true;
-        updateToggleIcon(true); // アイコンをPauseにする
-        await eel.start_playback_py(events, offset)();
-    }
-    // ケース2: 再生中 → 一時停止
-    else if (isPlaying && !isPaused) {
-        isPaused = true;
-        pausedAt = offset; // 一時停止した時刻を保存
+    if (!wavesurfer) return;
 
-        updateToggleIcon(false); // アイコンをPlayにする
-        eel.toggle_pause_py(true); // Pythonを一時停止
+    if (wavesurfer.isPlaying()) {
+        // 再生中 → 一時停止
+        wavesurfer.pause();
+        updateToggleIcon(false);
         js_log("Paused");
-    }
-    // ケース3: 一時停止中 → 再開
-    else if (isPlaying && isPaused) {
-        if (Math.abs(offset - pausedAt) > 0.1) {
-            js_log("Position changed. Restarting from " + offset.toFixed(3) + "s...");
-            
-            // 1. 一旦、古い再生スレッドを停止させる
-            eel.stop_playback_py();
-            
-            // 2. Python側の停止処理が完了するのを少し待つ（これ重要ですの！）
-            // ※すぐにstartを呼ぶと、前のスレッドがまだ生きていて弾かれる可能性がありますの
-            await new Promise(r => setTimeout(r, 200));
-
-            // 3. 状態をリセットして、新しい位置から再生し直す
-            isPaused = false;
-            isPlaying = true; // startするのでTrueのまま
-            updateToggleIcon(true);
-            
-            // 新しい位置からスタート！
-            await eel.start_playback_py(events, offset)();
-        } 
-        else {
-            // 位置が変わっていないなら、普通に再開（Resume）
-            isPaused = false;
-            updateToggleIcon(true);
-            eel.toggle_pause_py(false);
-            js_log("Resumed");
-        }
+    } else {
+        // 停止中 → 再生
+        // 再生開始時にVTubeStudioにフォーカスを当てる
+        eel.focus_window_py()(); 
+        
+        wavesurfer.play();
+        updateToggleIcon(true);
+        js_log("Playing...");
     }
 }
 
@@ -342,19 +347,6 @@ function updateToggleIcon(showPause) {
     }
 } 
 
-async function startPlayback() {
-    const offset = document.getElementById('start-offset').value;
-    document.getElementById('btn-play').disabled = true;
-    document.getElementById('btn-stop').disabled = false;
-    
-    // 音声ファイル長の取得は別途必要ですが、ここではイベントリストを Python 側へ渡して再生を開始
-    await eel.start_playback_py(events, offset)();
-}
-
-// 再生停止を Python に通知
-function stopPlayback() {
-    eel.stop_playback_py();
-}
 
 async function saveBundle() {
     // 現在のイベントリストを JSON にして Python 側へ送信し、保存させる
