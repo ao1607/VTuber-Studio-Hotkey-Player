@@ -1,0 +1,273 @@
+:root {
+    --bg-color: #1e1e2e;
+    --panel-color: #2a2a3c;
+    --text-color: #e0e0e0;
+    --accent-color: #89b4fa;
+    --danger-color: #f38ba8;
+    --success-color: #a6e3a1;
+}
+
+body {
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+header h1 {
+    margin: 0 0 10px 0;
+    font-size: 1.2rem;
+    color: var(--accent-color);
+}
+
+.control-panel {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+button {
+    background: var(--panel-color);
+    border: 1px solid #444;
+    color: white;
+    padding: 5px 10px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+button:hover { background: #3a3a4c; }
+
+/* ▼▼▼ メインエリアの調整 ▼▼▼ */
+.main-content {
+    display: flex;
+    flex: 1;
+    gap: 10px;
+    overflow: hidden; 
+    margin-bottom: 10px; /* フッターとの隙間 */
+}
+
+/* ▼▼▼ プレイヤーバー（フッター）のモダン化 ▼▼▼ */
+.player-bar {
+    background: #2a2a3c;
+    border-top: 1px solid #444;
+    padding: 0; /* 余白は内部で調整 */
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 -4px 10px rgba(0,0,0,0.3);
+    z-index: 10;
+}
+
+/* 波形エリア */
+.player-waveform {
+    height: 80px; /* 波形の高さ固定 */
+    background: #1e1e2e;
+    position: relative;
+    border-bottom: 1px solid #333;
+}
+#waveform {
+    width: 100%;
+    height: 100%;
+}
+#waveform-loading {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: #888;
+    font-size: 0.8rem;
+    pointer-events: none;
+}
+
+/* コントロールエリア */
+.player-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+}
+
+/* 左側：入力欄 */
+.control-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #ccc;
+    font-size: 0.9rem;
+}
+.input-dark {
+    background: #111;
+    border: 1px solid #555;
+    color: white;
+    padding: 5px;
+    border-radius: 4px;
+    width: 60px;
+    text-align: center;
+}
+
+/* 中央：メインボタン */
+.control-center {
+    display: flex;
+    gap: 15px;
+}
+
+.modern-btn {
+    border: none;
+    border-radius: 50px; /* 丸みをつける */
+    padding: 10px 30px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+    color: white;
+}
+
+.modern-btn:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+
+.modern-btn:disabled {
+    background: #444 !important;
+    color: #888;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+/* 再生ボタン：鮮やかな緑 */
+.btn-play {
+    background: linear-gradient(135deg, #a6e3a1, #56ab2f);
+    color: #111; /* 文字は黒で見やすく */
+}
+.btn-play:hover {
+    background: linear-gradient(135deg, #b6f3b1, #66bb3f);
+    box-shadow: 0 0 15px rgba(166, 227, 161, 0.4);
+}
+
+/* 停止ボタン：警告の赤 */
+.btn-stop {
+    background: linear-gradient(135deg, #f38ba8, #d63031);
+    color: white;
+}
+.btn-stop:hover {
+    background: linear-gradient(135deg, #ff9bb8, #e64041);
+    box-shadow: 0 0 15px rgba(243, 139, 168, 0.4);
+}
+
+/* 右側：時間表示 */
+.control-right {
+    min-width: 100px;
+    text-align: right;
+}
+.time-display {
+    font-family: 'Consolas', monospace;
+    font-size: 1.2rem;
+    color: #89b4fa;
+    text-shadow: 0 0 5px rgba(137, 180, 250, 0.3);
+}
+
+/* --- レスポンシブ対応（画面が狭い時） --- */
+@media (max-width: 600px) {
+    .player-controls {
+        flex-direction: column;
+        gap: 10px;
+    }
+}
+
+.timeline-editor {
+    flex: 2;
+    background: var(--panel-color);
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+}
+
+.table-header {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 60px;
+    font-weight: bold;
+    border-bottom: 1px solid #555;
+    padding-bottom: 5px;
+    margin-bottom: 5px;
+}
+
+.event-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.event-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 60px;
+    padding: 4px 0;
+    border-bottom: 1px solid #333;
+    align-items: center;
+}
+
+.input-row {
+    margin-top: 10px;
+    display: flex;
+    gap: 5px;
+}
+input, select {
+    background: #111;
+    border: 1px solid #444;
+    color: white;
+    padding: 4px;
+    border-radius: 4px;
+}
+
+.log-panel {
+    flex: 1;
+    background: #111;
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+}
+#log-box {
+    flex: 1;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 0.9rem;
+    color: #ccc;
+}
+
+footer {
+    margin-top: 10px;
+    background: var(--panel-color);
+    padding: 10px;
+    border-radius: 8px;
+}
+
+.progress-bar-container {
+    height: 6px;
+    background: #444;
+    margin: 10px 0;
+    border-radius: 3px;
+    overflow: hidden;
+}
+.progress-bar {
+    height: 100%;
+    width: 0%;
+    background: var(--accent-color);
+    transition: width 0.1s linear;
+}
+
+.btn-play { background: linear-gradient(135deg, #a6e3a1, #56ab2f); color: #111; font-weight: bold; }
+.btn-stop { background: linear-gradient(135deg, #f38ba8, #d63031); color: white; font-weight: bold; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
