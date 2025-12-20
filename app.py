@@ -11,6 +11,36 @@ import pygetwindow as gw
 from pathlib import Path
 import subprocess
 import bottle
+import time
+
+
+
+class PrintToJsLogger(object):
+    def __init__(self):
+        self.terminal = sys.stdout  # 元の標準出力（ターミナル）を保存
+
+    def write(self, message):
+        # 1. まずはターミナルに出力（これがないと黒い画面に何も出なくなる）
+        self.terminal.write(message)
+        
+        # 2. JavaScriptに送る
+        # print()は改行コード "\n" だけを別途送ってくることがあるので、
+        # 空白だけのメッセージは無視するようにするとログが綺麗になりますの
+        text = message.strip()
+        if text:
+            try:
+                # JavaScript側の js_log(msg) を呼び出す
+                eel.js_log(text)
+            except Exception:
+                # Eelがまだ接続されていない時やエラー時は無視
+                pass
+
+    def flush(self):
+        # ターミナルのフラッシュ処理
+        self.terminal.flush()
+
+
+sys.stdout = PrintToJsLogger()
 
 
 
@@ -23,6 +53,7 @@ def resource_path(relative_path):
 # --- グローバル変数 ---
 STATE = {
     "audio_path": "",
+    "key_duration": 0.08  # デフォルト値を追加
 }
 
 if hasattr(sys, 'frozen'):
@@ -184,25 +215,68 @@ def load_bundle():
     except Exception as e:
         eel.js_log(f"読み込みエラー: {e}")
         return None
+    
+
+
+@eel.expose
+def update_key_duration_py(duration):
+    """JSからキー押下時間の設定を受け取る"""
+    try:
+        val = float(duration)
+        # 安全のため、極端な値は制限しておくといいですの
+        if val < 0.01: val = 0.01
+        if val > 1.0: val = 1.0
+        STATE["key_duration"] = val
+        print(f"Duration updated: {val}")
+    except:
+        pass
+
+
+
 
 # ▼▼▼ 単純にキーを押すだけの関数 ▼▼▼
 @eel.expose
-def trigger_hotkey_py(key):
-    """JSから呼ばれてホットキーを送信する"""
+def trigger_hotkey_py(key_str):
+    """
+    main.py のロジックを完全再現したホットキー実行関数
+    JSから送られてくる "Right Shift+1" などを分解して、
+    keyboardライブラリで確実に押下します。
+    """
+    print(f"Triggering: {key_str}") # デバッグ用ログ
+    
+    if not key_str:
+        return
+
+    # 1. キー文字列を分解して正規化
+    # 例: "Right Shift+1" → ["right shift", "1"]
+    # 例: "Ctrl+S" → ["ctrl", "s"]
+    keys = [k.strip().lower() for k in key_str.split('+')]
+
     try:
-        # 文字列が空なら何もしない
-        if not key: return
-
-        # VTSへのフォーカスはJS側で再生開始時に一度呼ぶ設計になっているが、
-        # ここで呼ぶとより確実。ただし動作が重くなる可能性あり。
-        # focus_window_py() 
-
-        # keyboard.send は "ctrl+s" のような複合キーを自動で処理してくれますの
-        # 以前のように無理やり Right Shift を押す必要はありませんの
-        keyboard.send(key)
+        # 2. 修飾キーを含めて順番に「押し込み (Press)」
+        for k in keys:
+            keyboard.press(k)
         
+        # 3. デフォルト 0.08秒 (80ms) 待機
+        # これがないとVTube Studioが認識しないことがありますの
+        time.sleep(STATE["key_duration"])
+        
+        # 4. 逆順に「離す (Release)」
+        # 押した順序と逆（後に入れたキーから離す）のが作法ですの
+        for k in reversed(keys):
+            keyboard.release(k)
+            
     except Exception as e:
-        print(f"Key Error: {e}")
+        print(f"Hotkey Error: {e}")
+        # エラーが起きてもキーが押しっぱなしにならないように救済
+        for k in keys:
+            try:
+                keyboard.release(k)
+            except:
+                pass
+
+
+
 @eel.expose
 def focus_window_py():
     """再生開始時にVTubeStudioをアクティブにする"""

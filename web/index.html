@@ -6,6 +6,7 @@
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
     <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.min.js"></script>
+    <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/timeline.min.js"></script>
     <script type="text/javascript" src="/eel.js"></script>
     <script defer src="main.js"></script>
 </head>
@@ -13,10 +14,53 @@
     <div id="modal-settings" class="modal-overlay" style="display: none;">
         <div class="modal-content">
             <h3>設定</h3>
-            <div class="settings-body" style="color: #ccc; margin-bottom: 20px;">
-                <p>まだ設定項目はありません</p>
+            <div class="settings-body">
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <span>キー押下時間 (秒)</span>
+                        <small>VTSが反応しない時は長くするのですの</small>
+                    </div>
+                    <div class="setting-control">
+                        <input type="range" id="set-duration" min="0.01" max="0.3" step="0.01" value="0.08" oninput="updateSettings('duration')">
+                        <span id="val-duration">0.08s</span>
+                    </div>
                 </div>
-            <div class="modal-buttons" style="justify-content: flex-end;">
+
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <span>スキップ時間 (秒)</span>
+                        <small>ボタンを押した時の移動量</small>
+                    </div>
+                    <div class="setting-control">
+                        <input type="number" id="set-skip" min="1" max="60" value="10" class="input-dark" onchange="updateSettings('skip')">
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <span>マスター音量</span>
+                    </div>
+                    <div class="setting-control">
+                        <input type="range" id="set-volume" min="0" max="1" step="0.05" value="1.0" oninput="updateSettings('volume')">
+                        <span id="val-volume">100%</span>
+                    </div>
+                </div>
+
+                <div class="setting-row">
+                    <div class="setting-label">
+                        <span>オートスクロール</span>
+                        <small>再生に合わせて画面を動かすか</small>
+                    </div>
+                    <div class="setting-control">
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="set-autoscroll" onchange="updateSettings('autoscroll')">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-buttons" style="justify-content: flex-end; margin-top: 20px;">
                 <button class="btn-cancel" onclick="closeSettingsModal()">閉じる</button>
             </div>
         </div>
@@ -107,7 +151,9 @@
 
     <footer class="player-bar">
         <div id="waveform-container" class="player-waveform">
-            <div id="waveform"></div>
+            <div id="waveform">
+                <div id="wave-timeline"></div>
+            </div>
             <div id="waveform-loading">(ここに波形が表示されます)</div>
         </div>
 

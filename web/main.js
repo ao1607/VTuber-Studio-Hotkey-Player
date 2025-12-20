@@ -10,6 +10,19 @@ let pausedAt = 0;    // 一時停止した時刻（再開時に使用）
 let nextEventIndex = 0; // 次に発火すべきイベントのインデックス
 
 
+// 設定管理オブジェクト（デフォルト値）
+let appConfig = {
+    keyDuration: 0.08,
+    skipSeconds: 10,
+    volume: 1.0,
+    autoScroll: false
+};
+
+
+
+
+
+
 function updateNextEventIndex() {
     const currentTime = wavesurfer.getCurrentTime();
     nextEventIndex = 0;
@@ -33,6 +46,10 @@ let currentZoom = 0;
 // --- 初期化処理 ---
 document.addEventListener('DOMContentLoaded', () => {
 
+
+    loadSettings();
+
+
     document.addEventListener('contextmenu', (e) => {
         e.preventDefault();
     });
@@ -43,22 +60,31 @@ document.addEventListener('DOMContentLoaded', () => {
         waveColor: '#4d4d60',      // 波形の色（未再生）
         progressColor: '#89b4fa',  // 波形の色（再生済み）
         cursorColor: '#ff5555',    // カーソルの色
-        height: 90,
+        height: 90,           // 波形の高さ
         responsive: true,
         normalize: true,           // 波形を最大化して見やすく
         backend: 'WebAudio',
         minPxPerSec: 0, // 最初は全体表示
-        autoCenter: false, // 勝手にスクロールされると邪魔なのでOFF
+        autoCenter: appConfig.autoScroll, // 勝手にスクロールされると邪魔なのでOFF
         dragToSeek: true,  // クリック＆ドラッグでシーク可能に
 
         plugins: [
-            WaveSurfer.Regions.create() // ここで有効化！
+            WaveSurfer.Regions.create(),
+            WaveSurfer.Timeline.create({
+                container: '#wave-timeline', // さっき作ったdivのIDを指定
+                height: 20,                  // 目盛りの高さ（お好みで調整）
+                style: {
+                    color: '#89b4fa',        // 文字の色（テーマに合わせて青っぽくしてみたぞ）
+                    fontSize: '10px'
+                }
+            })
         ],
     });
 
     wsRegions = wavesurfer.plugins[0];
 
-    wavesurfer.setVolume(1.0); // 音量を 1.0 に設定
+    wavesurfer.setVolume(appConfig.volume); // 音量を設定
+
     wavesurfer.on('ready', () => {
         // WaveSurferが生成したラッパー要素を取得
         const wrapper = document.querySelector('#waveform');        
@@ -189,9 +215,13 @@ document.addEventListener('DOMContentLoaded', () => {
         js_log("再生終了");
     });
 
+    
+    const activeModifiers = new Set();
 
-// ▼▼▼ 1. 画面全体の操作（Escで閉じる、Spaceで再生） ▼▼▼
+
+    // ▼▼▼ 1. 画面全体の操作（Escで閉じる、Spaceで再生） ▼▼▼
     document.addEventListener('keydown', (e) => {
+
         // Escキー：最優先でモーダルを閉じる
         if (e.code === 'Escape') {
             const loading = document.getElementById('loading-overlay');
@@ -234,6 +264,20 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
 
+    document.addEventListener('keyup', (e) => {
+        // キーが離されたらセットから削除
+        if (activeModifiers.has(e.code)) {
+            activeModifiers.delete(e.code);
+        }
+    });
+
+
+    // ウィンドウからフォーカスが外れたらリセット（押しっぱなし判定を防ぐ）
+    window.addEventListener('blur', () => {
+        activeModifiers.clear();
+    });
+
+
     // ▼▼▼ 2. キー設定入力欄の操作（バッジ表示版） ▼▼▼
     const keyInputIds = ['in-key', 'modal-key'];
 
@@ -246,6 +290,11 @@ document.addEventListener('DOMContentLoaded', () => {
         inputDiv.addEventListener('keydown', (e) => {
             e.preventDefault();
             e.stopPropagation();
+
+            // 修飾キーならセットに追加
+            if (['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight'].includes(e.code)) {
+                activeModifiers.add(e.code);
+            }
 
             // Backspace/Delete でクリア
             if (e.code === 'Backspace' || e.code === 'Delete') {
@@ -262,11 +311,40 @@ document.addEventListener('DOMContentLoaded', () => {
             const isAlt   = code === 'AltLeft' || code === 'AltRight';
             const isMeta  = code === 'MetaLeft' || code === 'MetaRight';
 
-            // 2. 修飾キーの状態チェック (押されているものを追加)
-            if (e.ctrlKey && !isCtrl) keys.push('Ctrl');
-            if (e.altKey && !isAlt) keys.push('Alt');
-            if (e.shiftKey && !isShift) keys.push('Shift');
-            if (e.metaKey && !isMeta) keys.push('Win'); 
+            // 2. 修飾キーの状態チェック (追跡した Set を使って左右を判別！)
+            // --- Ctrl ---
+            if (e.ctrlKey && !isCtrl) {
+                let added = false;
+                if (activeModifiers.has('ControlLeft')) { keys.push('Left Ctrl'); added = true; }
+                if (activeModifiers.has('ControlRight')) { keys.push('Right Ctrl'); added = true; }
+                // フォールバック（万が一追跡漏れがあった場合）
+                if (!added) keys.push('Ctrl');
+            }
+
+            // --- Alt ---
+            if (e.altKey && !isAlt) {
+                let added = false;
+                if (activeModifiers.has('AltLeft')) { keys.push('Left Alt'); added = true; }
+                if (activeModifiers.has('AltRight')) { keys.push('Right Alt'); added = true; }
+                if (!added) keys.push('Alt');
+            }
+
+            // --- Shift ---
+            if (e.shiftKey && !isShift) {
+                let added = false;
+                if (activeModifiers.has('ShiftLeft')) { keys.push('Left Shift'); added = true; }
+                if (activeModifiers.has('ShiftRight')) { keys.push('Right Shift'); added = true; }
+                if (!added) keys.push('Shift');
+            }
+
+            // --- Win / Meta ---
+            if (e.metaKey && !isMeta) {
+                 // Winキーは左右区別しないことが多いけど、一応やっておきますの
+                let added = false;
+                if (activeModifiers.has('MetaLeft')) { keys.push('Left Win'); added = true; }
+                if (activeModifiers.has('MetaRight')) { keys.push('Right Win'); added = true; }
+                if (!added) keys.push('Win'); 
+            }
 
             // 3. メインキーの処理
             // 文字・数字キー
@@ -277,12 +355,12 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (code === 'Space') {
                 code = 'Space';
             }
-            // 修飾キー（左右区別）
-            else if (code === 'ShiftLeft') code = 'Shift';
+            // 修飾キー（左右区別して名前を入れる）
+            else if (code === 'ShiftLeft') code = 'Left Shift';   // ★ここを 'Shift' から変更！
             else if (code === 'ShiftRight') code = 'Right Shift';
-            else if (code === 'ControlLeft') code = 'Ctrl';
+            else if (code === 'ControlLeft') code = 'Left Ctrl';  // ★ここも 'Ctrl' から変更しておいたぞ
             else if (code === 'ControlRight') code = 'Right Ctrl';
-            else if (code === 'AltLeft') code = 'Alt';
+            else if (code === 'AltLeft') code = 'Left Alt';       // ★ここも
             else if (code === 'AltRight') code = 'Right Alt';
             
             // 配列に追加
@@ -605,40 +683,55 @@ function loadWaveform(url) {
 
 function skipBackward() {
     if (!wavesurfer) return;
-    // 現在位置から -10秒
-    wavesurfer.skip(-10);
-    updateNextEventIndex(); // スキップ後に次のイベントを更新
-    js_log("skipped back 10s");
+    // 設定値を使う
+    wavesurfer.skip(-appConfig.skipSeconds);
+    updateNextEventIndex();
+    js_log(`skipped back ${appConfig.skipSeconds}s`);
 }
 
 function skipForward() {
     if (!wavesurfer) return;
-    // 現在位置から +10秒
-    wavesurfer.skip(10);
-    updateNextEventIndex(); // スキップ後に次のイベントを更新
-    js_log("skipped forward 10s");
+    // 設定値を使う
+    wavesurfer.skip(appConfig.skipSeconds);
+    updateNextEventIndex();
+    js_log(`skipped forward ${appConfig.skipSeconds}s`);
 }
 
 
 // ★ バッジを描画するヘルパー関数 ★
 function renderHotkeys(element, keyArray) {
-    // 1. 見た目を作る (HTML)
+    // 1. まず中身をリセット
     element.innerHTML = '';
+
     keyArray.forEach(k => {
         const span = document.createElement('span');
         span.className = 'kbd-badge';
         
-        // クラスをつけて色を変える（小文字にして判定）
-        if (k.toLowerCase().includes('ctrl')) span.classList.add('ctrl');
-        if (k.toLowerCase().includes('shift')) span.classList.add('shift');
-        if (k.toLowerCase().includes('alt')) span.classList.add('alt');
+        const lower = k.toLowerCase();
+
+        // --- 色付けのクラス付与 ---
+        if (lower.includes('ctrl')) span.classList.add('ctrl');
+        if (lower.includes('shift')) span.classList.add('shift');
+        if (lower.includes('alt')) span.classList.add('alt');
         
-        span.textContent = k;
+        // --- 表示テキストの調整 ---
+        // 内部データは "Right Shift" だが、画面には "R-Shift" と出す
+        let displayText = k;
+        
+        if (lower.includes('right')) {
+            span.classList.add('right-key'); // 必要ならCSSで右専用の色を作れるようにクラス追加
+            displayText = k.replace('Right ', 'R-'); // "Right Shift" → "R-Shift"
+        } 
+        else if (lower.includes('left')) {
+            span.classList.add('left-key'); // 必要ならCSSで左専用の色を作れるようにクラス追加
+            displayText = k.replace('Left ', 'L-'); // "Left Shift" → "L-Shift"
+        }        // それ以外はそのまま
+
+        span.textContent = displayText;
         element.appendChild(span);
     });
 
-    // 2. 実際の値をデータ属性に保存 (JSで読み取る用)
-    // 例: data-value="Ctrl+Shift+A"
+    // 2. 実際の値は「完全な文字列」で保存 (Pythonには "Right Shift" と送るため)
     element.dataset.value = keyArray.join('+');
 }
 
@@ -752,18 +845,95 @@ function renderMarkers() {
 
 
 function openSettingsModal() {
-    // 再生中なら止める（お好みで）
+    // 1. 現在の設定値をUI（入力欄）にセットする
+    document.getElementById('set-duration').value = appConfig.keyDuration;
+    document.getElementById('val-duration').innerText = appConfig.keyDuration.toFixed(2) + "s";
+
+    document.getElementById('set-skip').value = appConfig.skipSeconds;
+
+    document.getElementById('set-volume').value = appConfig.volume;
+    document.getElementById('val-volume').innerText = Math.round(appConfig.volume * 100) + "%";
+
+    document.getElementById('set-autoscroll').checked = appConfig.autoScroll;
+
+    // 2. 再生中なら一時停止する
     if (wavesurfer && wavesurfer.isPlaying()) {
         wavesurfer.pause();
         updateToggleIcon(false);
     }
     
+    // 3. モーダルを表示
     document.getElementById('modal-settings').style.display = 'flex';
 }
+
+
+
 
 function closeSettingsModal() {
     document.getElementById('modal-settings').style.display = 'none';
 }
+
+
+function loadSettings() {
+    const saved = localStorage.getItem('vts_player_config');
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved);
+            // 既存の設定オブジェクトに上書き（新しい設定項目が増えても大丈夫なように）
+            appConfig = { ...appConfig, ...parsed };
+        } catch (e) {
+            console.error("設定の読み込みに失敗:", e);
+        }
+    }
+    // Python側にも初期値を送っておく
+    eel.update_key_duration_py(appConfig.keyDuration);
+}
+
+
+function saveSettings() {
+    localStorage.setItem('vts_player_config', JSON.stringify(appConfig));
+}
+
+// UIの入力変更時に呼ばれる関数
+function updateSettings(key) {
+    if (!wavesurfer) return;
+
+    if (key === 'duration') {
+        const val = parseFloat(document.getElementById('set-duration').value);
+        appConfig.keyDuration = val;
+        document.getElementById('val-duration').innerText = val.toFixed(2) + "s";
+        // Pythonに通知
+        eel.update_key_duration_py(val);
+    }
+    else if (key === 'skip') {
+        const val = parseInt(document.getElementById('set-skip').value);
+        appConfig.skipSeconds = val;
+    }
+    else if (key === 'volume') {
+        const val = parseFloat(document.getElementById('set-volume').value);
+        appConfig.volume = val;
+        document.getElementById('val-volume').innerText = Math.round(val * 100) + "%";
+        // 即時反映
+        wavesurfer.setVolume(val);
+    }
+    else if (key === 'autoscroll') {
+        const val = document.getElementById('set-autoscroll').checked;
+        appConfig.autoScroll = val;
+        // 即時反映 (v7のsetOptionsを使用)
+        wavesurfer.setOptions({ autoCenter: val });
+    }
+    else if (key === 'height') {
+        const val = parseInt(document.getElementById('set-height').value);
+        appConfig.waveHeight = val;
+        document.getElementById('val-height').innerText = val + "px";
+        // 即時反映
+        wavesurfer.setOptions({ height: val });
+    }
+
+    // 変更があるたびに保存
+    saveSettings();
+}
+
 
 // 設定モーダルの背景クリックで閉じる
 document.getElementById('modal-settings').addEventListener('click', (e) => {

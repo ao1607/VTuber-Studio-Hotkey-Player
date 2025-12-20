@@ -148,7 +148,7 @@ button:hover { background: #3a3a4c; }
 
 /* 波形エリア */
 .player-waveform {
-    height: 90px; /* 波形の高さ固定 */
+    height: 110px; /* 波形の高さ固定 */
     background: #1e1e2e;
     position: relative;
     border-bottom: 1px solid #333;
@@ -288,7 +288,7 @@ button:hover { background: #3a3a4c; }
 }
 
 .timeline-editor {
-    flex: 2;
+    flex: 1.5;
     background: var(--panel-color);
     border-radius: 8px;
     padding: 10px;
@@ -394,7 +394,7 @@ input, select {
     
     /* ターミナルフォント指定 */
     font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
-    font-size: 0.9rem;
+    font-size: 0.75rem;
     color: #cccccc; /* 標準テキスト色 */
     line-height: 1.4;
 }
@@ -752,4 +752,190 @@ header h1 {
     background: rgba(255, 255, 255, 0.1);
     color: #fff;
     transform: rotate(90deg); /* ホバーで回転させる遊び心ですの！ */
+}
+
+
+/* ▼▼▼ 設定モーダル用のスタイル ▼▼▼ */
+
+/* モーダルの幅を少し広げる */
+.settings-modal-content {
+    width: 480px !important; /* 少し余裕を持たせた */
+    max-width: 90vw;
+    background: #2a2a3c;
+    border: 1px solid #444;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+.settings-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0; /* setting-rowのborderとpaddingで調整するのでgapは0に */
+    max-height: 400px;
+    overflow-y: auto;
+    padding-right: 5px; /* スクロールバー用 */
+    margin-top: 10px;
+}
+
+.setting-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 5px; /* 上下の余白を増やして押しやすく */
+    border-bottom: 1px solid #3a3a4c; /* 少し明るめの区切り線 */
+}
+
+.setting-row:last-child {
+    border-bottom: none;
+}
+
+.setting-label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1; /* ラベル部分が余白を埋めるように */
+}
+
+.setting-label span {
+    font-weight: 600;
+    color: #eee;
+    font-size: 0.95rem;
+}
+
+.setting-label small {
+    font-size: 0.8rem;
+    color: #999;
+}
+
+.setting-control {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 140px;
+    justify-content: flex-end;
+}
+
+/* 数値表示テキスト */
+.setting-control span {
+    font-family: 'Consolas', monospace;
+    font-size: 0.9rem;
+    color: #89b4fa;
+    width: 45px;
+    text-align: right;
+    font-weight: bold;
+}
+
+/* ▼▼▼ レンジスライダー（つまみ）のカスタムデザイン ▼▼▼ */
+input[type=range] {
+    -webkit-appearance: none; /* デフォルトの見た目を消す */
+    width: 120px;
+    background: transparent;
+    cursor: pointer;
+}
+
+/* スライダーの軌道 */
+input[type=range]::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 6px;
+    cursor: pointer;
+    background: #444;
+    border-radius: 3px;
+    transition: all 0.2s;
+}
+
+/* つまみ部分 */
+input[type=range]::-webkit-slider-thumb {
+    height: 16px;
+    width: 16px;
+    border-radius: 50%;
+    background: #89b4fa; /* アクセントカラー */
+    cursor: pointer;
+    -webkit-appearance: none;
+    margin-top: -5px; /* 軌道の中央に来るように調整 */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    transition: transform 0.1s;
+}
+
+input[type=range]:hover::-webkit-slider-thumb {
+    transform: scale(1.2); /* ホバーで少し大きく */
+    background: #b4befe;
+}
+
+input[type=range]:focus::-webkit-slider-runnable-track {
+    background: #555;
+}
+
+/* ▼▼▼ 数値入力欄のデザイン（スキップ秒数など） ▼▼▼ */
+.setting-control input[type="number"] {
+    background: #181825;
+    border: 1px solid #555;
+    color: #fff;
+    padding: 6px;
+    border-radius: 4px;
+    width: 50px;
+    text-align: center;
+    font-family: 'Consolas', monospace;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.setting-control input[type="number"]:focus {
+    border-color: #89b4fa;
+}
+
+
+/* ▼▼▼ スイッチ（トグル）のデザイン ▼▼▼ */
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px; /* 少し大きく */
+    height: 24px;
+}
+
+.toggle-switch input { 
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: #444;
+    transition: .3s;
+    border-radius: 24px;
+}
+
+.slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .3s cubic-bezier(0.4, 0.0, 0.2, 1); /* 動きをスムーズに */
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+input:checked + .slider {
+    background-color: #89b4fa;
+}
+
+input:checked + .slider:before {
+    transform: translateX(20px);
+}
+
+/* フォーカス時のリング表示（アクセシビリティ） */
+input:focus + .slider {
+    box-shadow: 0 0 0 2px rgba(137, 180, 250, 0.3);
+}
+
+
+
+/* 設定モーダルだけ横幅を広げる */
+#modal-settings .modal-content {
+    width: 600px;       /* 好きな幅にするのですの（デフォルトはたぶん400pxくらい？） */
+    max-width: 90vw;    /* 画面からはみ出さないようにする保険 */
 }
