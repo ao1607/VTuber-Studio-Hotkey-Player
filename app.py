@@ -73,6 +73,7 @@ def focus_vtube_studio(title_keyword: str = "VTube Studio", wait_s: float = 0.3)
 def play_logic(audio_path, events, start_offset=0.0):
     STATE["is_playing"] = True
     stop_event = STATE["stop_event"]
+    pause_event = STATE["pause_event"]
     
     try:
         eel.js_log("VTube Studioにフォーカスします...")
@@ -153,30 +154,6 @@ def play_logic(audio_path, events, start_offset=0.0):
                     keyboard.release(key)
                     keyboard.release("right shift")
                     fired_indices.add(idx)
-
-            # 一時停止処理
-            for idx, pause_sec in enumerate(pauses):
-                if idx in pause_indices: continue
-                if now >= pause_sec:
-                    eel.js_log(f"Pause at {now:.2f}s")
-                    pygame.mixer.music.pause()
-                    eel.js_show_resume_button(idx, pause_sec) # 再開ボタンを表示
-                    
-                    # 再開待ちループ
-                    pause_start = time.perf_counter()
-                    while True:
-                        if stop_event.is_set(): break
-                        # JSから resume_playback が呼ばれるのを待つフラグ管理などは省略し、
-                        # シンプルにPython側でwaitする実装にするなら threading.Event を使う
-                        # ここでは簡易的に実装
-                        time.sleep(0.1)
-                        # ※本来は再開イベント待ち実装が必要
-                        # 今回はシンプル化のため「停止」のみサポートするか、
-                        # Eel経由で再開フラグを受け取る設計にする必要がありますの。
-                        # ここでは「一時停止機能」は実装が複雑になるので、
-                        # 基礎的な再生・キー連動を優先しますの。
-                    
-                    pause_indices.add(idx)
             
             time.sleep(0.01)
 
@@ -362,6 +339,7 @@ def start_playback_py(events, start_offset=0.0):
     # イベントリストをPython側で保存
     STATE["events"] = events
     STATE["stop_event"] = threading.Event()
+    STATE["pause_event"] = threading.Event()
     
     if not STATE["audio_path"]:
         eel.js_log("音声ファイルが選択されていません")
