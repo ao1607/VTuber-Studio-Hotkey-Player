@@ -140,7 +140,7 @@ def load_bundle():
                 return {
                     "audio_path": final_audio_path,
                     "rel_path": rel_path,
-                    "events": data.get("timeline", [])
+                    "events": data.get("events", [])
                 }
     except Exception as e:
         eel.js_log(f"読み込みエラー: {e}")
