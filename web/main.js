@@ -10,6 +10,23 @@ let pausedAt = 0;    // 一時停止した時刻（再開時に使用）
 let nextEventIndex = 0; // 次に発火すべきイベントのインデックス
 
 
+function updateNextEventIndex() {
+    const currentTime = wavesurfer.getCurrentTime();
+    nextEventIndex = 0;
+    
+    for (let i = 0; i < events.length; i++) {
+        // 現在時刻より「未来」にある最初のイベントを探す
+        // ※ 0.1秒くらいの誤差は許容して「これから来る」とみなすとなお良しですの
+        if (events[i].time > currentTime) {
+            nextEventIndex = i;
+            return;
+        }
+    }
+    // 全部過去のイベントなら、最後まで終わったことにする
+    nextEventIndex = events.length;
+}
+
+
 // ズームレベル管理
 let currentZoom = 0;
 
@@ -117,8 +134,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 
+
+
+
+
     // シーク（手動移動）した時の処理
     wavesurfer.on('seek', () => {
+        updateNextEventIndex();
         const currentTime = wavesurfer.getCurrentTime();
         document.getElementById('time-display').textContent = currentTime.toFixed(3) + "s";
         
@@ -135,7 +157,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 nextEventIndex = events.length;
             }
         }
-        // js_log(`Seeked to ${currentTime.toFixed(2)}s. Next Event Index: ${nextEventIndex}`);
+        js_log(`Seeked to ${currentTime.toFixed(2)}s. Next Event Index: ${nextEventIndex}`);
+    });
+
+    // クリックやドラッグで操作した時にも次のイベントインデックスを更新する
+    wavesurfer.on('interaction', () => {
+         updateNextEventIndex();
+         js_log("User Interaction detected, updated nextEventIndex.");
+    });
+
+    // 再生開始時に、次のイベントインデックスを更新する
+    wavesurfer.on('play', () => {
+        updateNextEventIndex();
+        js_log("Playback started, updated nextEventIndex.");
     });
 
 
@@ -573,6 +607,7 @@ function skipBackward() {
     if (!wavesurfer) return;
     // 現在位置から -10秒
     wavesurfer.skip(-10);
+    updateNextEventIndex(); // スキップ後に次のイベントを更新
     js_log("skipped back 10s");
 }
 
@@ -580,6 +615,7 @@ function skipForward() {
     if (!wavesurfer) return;
     // 現在位置から +10秒
     wavesurfer.skip(10);
+    updateNextEventIndex(); // スキップ後に次のイベントを更新
     js_log("skipped forward 10s");
 }
 

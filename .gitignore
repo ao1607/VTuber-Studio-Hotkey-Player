@@ -1,2 +1,6 @@
 .venv
 /web/temp/*
+VTS_Hotkey_Player.spec
+build
+dist
+temp_audio

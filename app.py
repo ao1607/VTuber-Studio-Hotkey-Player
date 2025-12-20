@@ -10,6 +10,8 @@ import zipfile
 import pygetwindow as gw
 from pathlib import Path
 import subprocess
+import bottle
+
 
 
 def resource_path(relative_path):
@@ -46,13 +48,17 @@ def _copy_to_web_temp(src_path: str) -> str:
                 os.remove(os.path.join(TEMP_DIR, f))
             except: pass
         
-        filename = os.path.basename(src_path)
-        dest_path = os.path.join(TEMP_DIR, filename)
+        # 元の拡張子（.wav や .mp3）だけ抜き出す
+        ext = os.path.splitext(src_path)[1]
+        
+        # 固定の安全な名前にする（例: playing.wav）
+        safe_filename = f"playing{ext}"
+        
+        dest_path = os.path.join(TEMP_DIR, safe_filename)
         shutil.copy2(src_path, dest_path)
         
-        # Eel側（JS）からは /temp_audio/filename でアクセスできるようにする
-        # ※後述の eel.start でこのフォルダをマウントしますの
-        return f"temp_audio/{filename}"
+        # Eel側にはこの「安全な名前」を教える
+        return f"temp_audio/{safe_filename}"
     except Exception as e:
         print(f"Copy Error: {e}")
         return ""
@@ -81,8 +87,13 @@ def select_audio_file():
     cmd = """
     $f = New-Object System.Windows.Forms.OpenFileDialog;
     $f.Filter = 'Audio Files (*.wav;*.mp3;*.ogg)|*.wav;*.mp3;*.ogg|All Files (*.*)|*.*';
-    $f.Title = '音声ファイルを選択してくださいですの';
-    if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Host $f.FileName }
+    $f.Title = '音声ファイルを選択してくれですの';
+    $d = New-Object System.Windows.Forms.Form;
+    $d.TopMost = $true;
+    $d.Opacity = 0;
+    $d.ShowInTaskbar = $false;
+        if ($f.ShowDialog($d) -eq [System.Windows.Forms.DialogResult]::OK) { Write-Host $f.FileName }
+    $d.Dispose();
     """
     original_path = _show_powershell_dialog(cmd)
     
@@ -98,8 +109,13 @@ def save_bundle(data_json):
     $f = New-Object System.Windows.Forms.SaveFileDialog;
     $f.Filter = 'ZIP Archive (*.zip)|*.zip';
     $f.DefaultExt = 'zip';
-    $f.Title = 'バンドルを保存する場所を選ぶのですの';
-    if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Host $f.FileName }
+    $f.Title = 'バンドルを保存する場所を選びますの';
+    $d = New-Object System.Windows.Forms.Form;
+    $d.TopMost = $true;
+    $d.Opacity = 0;
+    $d.ShowInTaskbar = $false;
+    if ($f.ShowDialog($d) -eq [System.Windows.Forms.DialogResult]::OK) { Write-Host $f.FileName }
+    $d.Dispose();
     """
     path = _show_powershell_dialog(cmd)
     if not path or not STATE["audio_path"]: return
@@ -118,8 +134,13 @@ def load_bundle():
     cmd = """
     $f = New-Object System.Windows.Forms.OpenFileDialog;
     $f.Filter = 'ZIP Archive (*.zip)|*.zip';
-    $f.Title = '読み込むバンドルを選択してくださいですの';
-    if ($f.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) { Write-Host $f.FileName }
+    $f.Title = '読み込むバンドルを選択しろですの';
+    $d = New-Object System.Windows.Forms.Form;
+    $d.TopMost = $true;
+    $d.Opacity = 0;
+    $d.ShowInTaskbar = $false;
+    if ($f.ShowDialog($d) -eq [System.Windows.Forms.DialogResult]::OK) { Write-Host $f.FileName }
+    $d.Dispose();
     """
     path = _show_powershell_dialog(cmd)
     if not path: return None
@@ -208,9 +229,9 @@ if __name__ == "__main__":
         '--no-first-run',
         '--no-default-browser-check'
     ]
-    
-    # ▼▼▼ 4. 音声用の一時フォルダをJSから見えるようにマウント ▼▼▼
-    # これで <script src="/temp_audio/..."> でアクセスできますの
-    eel.browsers.set_path('temp_audio', TEMP_DIR)
+    @bottle.route('/temp_audio/<filename>')
+    def serve_temp_audio(filename):
+        # TEMP_DIR からファイルを直接探して返す最強の命令ですの
+        return bottle.static_file(filename, root=TEMP_DIR)
 
-    eel.start('index.html', size=(900, 650), cmdline_args=chrome_flags)
+    eel.start('index.html', size=(900, 650), cmdline_args=chrome_flags, port=0)
