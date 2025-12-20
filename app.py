@@ -20,9 +20,10 @@ import subprocess
 # グローバル変数で状態管理（簡易的）
 STATE = {
     "audio_path": "",
-    "events": [],  #List[Dict]
+    "events": [],
     "is_playing": False,
-    "stop_event": None
+    "stop_event": None,
+    "pause_event": None  # 追加
 }
 
 TEMP_DIR = os.path.join(os.path.dirname(__file__), 'web', 'temp')
@@ -115,8 +116,31 @@ def play_logic(audio_path, events, start_offset=0.0):
         pause_indices = set()
 
         while pygame.mixer.music.get_busy() and not stop_event.is_set():
+
+
+            if pause_event.is_set():
+                pygame.mixer.music.pause()
+                pause_start_sys = time.perf_counter()
+                
+                # 解除されるまで待機
+                while pause_event.is_set() and not stop_event.is_set():
+                    time.sleep(0.05)
+                
+                if stop_event.is_set(): break
+                
+                # 再開処理
+                pygame.mixer.music.unpause()
+                # 停止していた時間分、開始時間を後ろにずらす（補正）
+                pause_duration = time.perf_counter() - pause_start_sys
+                start_time += pause_duration
+                
+                # VTSにフォーカスし直し（親切設計）
+                focus_vtube_studio()
+
             now = time.perf_counter() - start_time
             eel.js_update_progress(now) # フロントエンドに進捗通知
+
+
 
             # キー押下処理
             for idx, (target_sec, key) in enumerate(schedule):
@@ -347,6 +371,16 @@ def start_playback_py(events, start_offset=0.0):
     t = threading.Thread(target=play_logic, args=(STATE["audio_path"], events, float(start_offset)))
     t.daemon = True
     t.start()
+
+
+@eel.expose
+def toggle_pause_py(should_pause):
+    if STATE["pause_event"]:
+        if should_pause:
+            STATE["pause_event"].set()     # 一時停止ON
+        else:
+            STATE["pause_event"].clear()   # 一時停止OFF（再開）
+
 
 @eel.expose
 def stop_playback_py():

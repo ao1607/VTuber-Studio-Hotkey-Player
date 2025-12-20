@@ -2,6 +2,10 @@ let events = [];
 let totalDuration = 0;
 let wavesurfer = null; // 波形表示用の WaveSurfer インスタンス
 
+// 再生状態管理フラグ
+let isPlaying = false; // 再生中かどうかのフラグ
+let isPaused = false;  // 一時停止中かどうかのフラグ
+
 
 
 // --- 初期化処理 ---
@@ -76,8 +80,13 @@ function js_update_progress(currentTime) {
 eel.expose(js_on_stop);
 // 再生停止時に呼ばれる（Python から呼び出される）
 function js_on_stop() {
+    isPlaying = false;
+    isPaused = false;
+    updateToggleIcon(false); // Playアイコンに戻す
+    
     document.getElementById('btn-play').disabled = false;
     document.getElementById('btn-stop').disabled = true;
+    if (wavesurfer) wavesurfer.seekTo(0);
     js_log("Stopped.");
 }
 
@@ -173,6 +182,50 @@ function toggleInput() {
         keyInput.style.display = 'inline-block';
     }
 }
+
+// ▼▼▼ トグルボタンのロジック ▼▼▼
+async function togglePlayback() {
+    const btn = document.getElementById('btn-toggle');
+    const offset = document.getElementById('start-offset').value;
+
+    // ケース1: まだ再生していない（停止状態）→ 再生開始
+    if (!isPlaying && !isPaused) {
+        isPlaying = true;
+        updateToggleIcon(true); // アイコンをPauseにする
+        await eel.start_playback_py(events, offset)();
+    }
+    // ケース2: 再生中 → 一時停止
+    else if (isPlaying && !isPaused) {
+        isPaused = true;
+        updateToggleIcon(false); // アイコンをPlayにする
+        eel.toggle_pause_py(true); // Pythonを一時停止
+        js_log("Paused");
+    }
+    // ケース3: 一時停止中 → 再開
+    else if (isPlaying && isPaused) {
+        isPaused = false;
+        updateToggleIcon(true); // アイコンをPauseにする
+        eel.toggle_pause_py(false); // Pythonを再開
+        js_log("Resumed");
+    }
+}
+
+// アイコンの切り替え（showPause: trueならPauseアイコンを表示）
+function updateToggleIcon(showPause) {
+    const iconPlay = document.getElementById('icon-play');
+    const iconPause = document.getElementById('icon-pause');
+    const btn = document.getElementById('btn-toggle');
+
+    if (showPause) {
+        iconPlay.style.display = 'none';
+        iconPause.style.display = 'block';
+        btn.classList.add('playing');
+    } else {
+        iconPlay.style.display = 'block';
+        iconPause.style.display = 'none';
+        btn.classList.remove('playing'); // Pause中も色を戻すかどうかはお好みで
+    }
+} 
 
 async function startPlayback() {
     const offset = document.getElementById('start-offset').value;

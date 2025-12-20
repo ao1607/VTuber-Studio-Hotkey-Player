@@ -231,6 +231,54 @@ input, select {
     border-radius: 4px;
 }
 
+/* ... (前略) ... */
+
+/* 入力欄もシンプルに */
+.input-minimal {
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid #555;
+    color: #ccc;
+    width: 50px;
+    text-align: center;
+    font-size: 0.9rem;
+    outline: none;
+}
+.input-minimal:focus {
+    border-bottom: 1px solid #89b4fa;
+    color: white;
+}
+
+/* トグルボタンのデザイン */
+.play-toggle {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: #e0e0e0; /* 明るい色で目立たせる */
+    color: #1e1e2e;      /* アイコンは暗く */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: transform 0.1s, background 0.2s;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+
+.play-toggle:hover {
+    background: #fff;
+    transform: scale(1.05);
+}
+
+.play-toggle:active {
+    transform: scale(0.95);
+}
+
+/* 再生中のスタイル（任意：色を変えるなど） */
+.play-toggle.playing {
+    background: #89b4fa; /* 再生中はアクセントカラーに */
+    color: #fff;
+}
+
 .log-panel {
     flex: 1;
     background: #111;
