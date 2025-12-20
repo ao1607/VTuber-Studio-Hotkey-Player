@@ -11,30 +11,48 @@ import pygetwindow as gw
 from pathlib import Path
 import subprocess
 
+
+def resource_path(relative_path):
+    """ PyInstallerでexe化した時に正しいパスを取得するための関数 """
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
 # --- グローバル変数 ---
 STATE = {
     "audio_path": "",
 }
 
-TEMP_DIR = os.path.join(os.path.dirname(__file__), 'web', 'temp')
+if hasattr(sys, 'frozen'):
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# 実際に保存する場所（webフォルダの中ではなく、exeの隣に独立させる方がトラブルが少ないですの）
+TEMP_DIR = os.path.join(BASE_DIR, 'temp_audio') 
 if not os.path.exists(TEMP_DIR):
     os.makedirs(TEMP_DIR)
+
 
 # --- ユーティリティ関数 ---
 
 def _copy_to_web_temp(src_path: str) -> str:
-    """音声をweb/tempにコピーし、Eelからアクセス可能な相対パスを返す"""
+    """音声を一時フォルダにコピーし、Eelからアクセス可能なパスを返す"""
     try:
         # 既存の一時ファイルを削除
         for f in os.listdir(TEMP_DIR):
             try:
+                os.path.join(TEMP_DIR, f)
                 os.remove(os.path.join(TEMP_DIR, f))
             except: pass
         
         filename = os.path.basename(src_path)
         dest_path = os.path.join(TEMP_DIR, filename)
         shutil.copy2(src_path, dest_path)
-        return f"temp/{filename}"
+        
+        # Eel側（JS）からは /temp_audio/filename でアクセスできるようにする
+        # ※後述の eel.start でこのフォルダをマウントしますの
+        return f"temp_audio/{filename}"
     except Exception as e:
         print(f"Copy Error: {e}")
         return ""
@@ -178,13 +196,21 @@ def focus_window_py():
 
 # --- Main ---
 if __name__ == "__main__":
-    eel.init('web')
-    # Chromeの起動オプションを設定
+    # ▼▼▼ 3. initの場所を修正するのですの！ ▼▼▼
+    # webフォルダの正しいパスを取得して指定
+    eel.init(resource_path('web'))
+    
+    # Chromeの起動オプション
     chrome_flags = [
-        '--disable-extensions',   # 拡張機能を無効化（これが本命）
-        '--disable-plugins',      # 余計なプラグインも無効化
-        '--incognito',            # シークレットモードで起動（履歴もクッキーも残さない完全な新品状態）
-        '--no-first-run',         # 初回起動時の「Chromeへようこそ」的なやつをスキップ
-        '--no-default-browser-check' # デフォルトブラウザのチェックをスキップ
+        '--disable-extensions',
+        '--disable-plugins',
+        '--incognito',
+        '--no-first-run',
+        '--no-default-browser-check'
     ]
-eel.start('index.html', size=(900, 700), cmdline_args=chrome_flags)
+    
+    # ▼▼▼ 4. 音声用の一時フォルダをJSから見えるようにマウント ▼▼▼
+    # これで <script src="/temp_audio/..."> でアクセスできますの
+    eel.browsers.set_path('temp_audio', TEMP_DIR)
+
+    eel.start('index.html', size=(900, 650), cmdline_args=chrome_flags)
