@@ -42,7 +42,7 @@ def _copy_to_web_temp(src_path: str) -> str:
 def _show_powershell_dialog(cmd):
     """PowerShellダイアログヘルパー"""
     ps_cmd = [
-        "powershell", "-noprofile", "-command", 
+        "powershell", "-noprofile", "-Sta", "-command", 
         f"Add-Type -AssemblyName System.Windows.Forms; {cmd}"
     ]
     try:
@@ -146,25 +146,24 @@ def load_bundle():
         eel.js_log(f"読み込みエラー: {e}")
         return None
 
-# ▼▼▼ 新機能: 単純にキーを押すだけの関数 ▼▼▼
+# ▼▼▼ 単純にキーを押すだけの関数 ▼▼▼
 @eel.expose
 def trigger_hotkey_py(key):
-    """JSから呼ばれてキーを押すだけ"""
+    """JSから呼ばれてホットキーを送信する"""
     try:
-        # VTSへのフォーカスはJS側で再生開始時に一度呼ぶか、ここで毎回呼ぶか。
-        # 毎回呼ぶと重いので、JS側で再生開始時にPythonへ「フォーカスして！」と命令を送るのがベターですが、
-        # ここでは念のため簡易的に入れます（ウィンドウ切り替えが発生しないよう注意）
+        # 文字列が空なら何もしない
+        if not key: return
+
+        # VTSへのフォーカスはJS側で再生開始時に一度呼ぶ設計になっているが、
+        # ここで呼ぶとより確実。ただし動作が重くなる可能性あり。
+        # focus_window_py() 
+
+        # keyboard.send は "ctrl+s" のような複合キーを自動で処理してくれますの
+        # 以前のように無理やり Right Shift を押す必要はありませんの
+        keyboard.send(key)
         
-        # print(f"Key Press: {key}") # デバッグ用
-        keyboard.press("right shift")
-        keyboard.press(key)
-        # 極短時間sleepがないと反応しないことがある
-        eel.sleep(0.05) 
-        keyboard.release(key)
-        keyboard.release("right shift")
     except Exception as e:
         print(f"Key Error: {e}")
-
 @eel.expose
 def focus_window_py():
     """再生開始時にVTubeStudioをアクティブにする"""
@@ -180,4 +179,12 @@ def focus_window_py():
 # --- Main ---
 if __name__ == "__main__":
     eel.init('web')
-    eel.start('index.html', size=(900, 600))
+    # Chromeの起動オプションを設定
+    chrome_flags = [
+        '--disable-extensions',   # 拡張機能を無効化（これが本命）
+        '--disable-plugins',      # 余計なプラグインも無効化
+        '--incognito',            # シークレットモードで起動（履歴もクッキーも残さない完全な新品状態）
+        '--no-first-run',         # 初回起動時の「Chromeへようこそ」的なやつをスキップ
+        '--no-default-browser-check' # デフォルトブラウザのチェックをスキップ
+    ]
+eel.start('index.html', size=(900, 700), cmdline_args=chrome_flags)

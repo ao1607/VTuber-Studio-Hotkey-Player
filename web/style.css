@@ -33,8 +33,87 @@ header h1 {
 
 .control-panel {
     display: flex;
-    gap: 10px;
+    justify-content: space-between;
+    align-items: center;
+    background: #2a2a3c;
+    padding: 8px 15px;
+    border-radius: 8px;
+    border: 1px solid #444;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
     margin-bottom: 10px;
+}
+
+/* 縦の仕切り線 */
+.toolbar-divider {
+    width: 1px;
+    height: 24px;
+    background: #444;
+    margin: 0 10px;
+}
+
+.toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* ツールバーボタン */
+.toolbar-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent; /* 背景なし */
+    border: 1px solid transparent; /* 透明な枠 */
+    color: #ccc;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.toolbar-btn svg {
+    stroke: #89b4fa; /* アイコンをアクセントカラーに */
+}
+
+.toolbar-btn:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: #555;
+    color: #fff;
+}
+
+.toolbar-btn:active {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(1px);
+}
+
+.toolbar-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: transparent;
+    border-color: transparent;
+}
+
+/* ファイル名表示バッジ */
+.file-status {
+    background: #111;
+    border: 1px solid #333;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    color: #888;
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis; /* 長すぎたら「...」にする */
+    font-family: 'Consolas', monospace;
+}
+/* 音声が選択されたら明るくするクラス */
+.file-status.active {
+    color: #a6e3a1;
+    border-color: #a6e3a1;
+    background: rgba(166, 227, 161, 0.1);
 }
 
 button {
@@ -69,7 +148,7 @@ button:hover { background: #3a3a4c; }
 
 /* 波形エリア */
 .player-waveform {
-    height: 80px; /* 波形の高さ固定 */
+    height: 90px; /* 波形の高さ固定 */
     background: #1e1e2e;
     position: relative;
     border-bottom: 1px solid #333;
@@ -86,20 +165,6 @@ button:hover { background: #3a3a4c; }
     scrollbar-color: #444 #1e1e2e;
 }
 
-
-/* Chrome/Edge用スクロールバーカスタマイズ */
-#waveform::-webkit-scrollbar {
-    height: 8px;
-}
-#waveform::-webkit-scrollbar-track {
-    background: #1e1e2e;
-}
-#waveform::-webkit-scrollbar-thumb {
-    background-color: #444;
-    border-radius: 4px;
-}
-
-
 #waveform-loading {
     position: absolute;
     top: 50%; left: 50%;
@@ -114,7 +179,7 @@ button:hover { background: #3a3a4c; }
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 15px 20px;
+    padding: 0px 20px;
 }
 
 /* 左側：入力欄 */
@@ -138,56 +203,69 @@ button:hover { background: #3a3a4c; }
 /* 中央：メインボタン */
 .control-center {
     display: flex;
-    gap: 15px;
-}
-
-.modern-btn {
-    border: none;
-    border-radius: 50px; /* 丸みをつける */
-    padding: 10px 30px;
-    font-size: 1rem;
-    font-weight: bold;
-    cursor: pointer;
-    display: flex;
+    gap: 16px; /* 間隔を少し狭めて一体感を出す */
     align-items: center;
-    gap: 8px;
-    transition: all 0.2s ease;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-    color: white;
 }
 
-.modern-btn:active {
-    transform: translateY(2px);
-    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+/* 共通のボタンスタイル（ベース） */
+.control-center button,
+.control-center .play-toggle {
+    background: transparent; /* 背景を透明に */
+    border: none;            /* 枠線を削除 */
+    border-radius: 50%;      /* 丸くする */
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #ddd;             /* 通常時の色（少し落ち着いた白） */
+    cursor: pointer;
+    transition: all 0.2s ease; /* 滑らかな変化 */
+    position: relative; /* ホバーエフェクト用 */
 }
 
-.modern-btn:disabled {
-    background: #444 !important;
-    color: #888;
+/* ホバー時の共通エフェクト（薄い円が浮かぶ） */
+.control-center button:hover,
+.control-center .play-toggle:hover {
+    background: rgba(255, 255, 255, 0.1); /* 薄い白背景 */
+    color: #fff; /* アイコンを真っ白に強調 */
+}
+
+/* クリック時のエフェクト（少し縮む） */
+.control-center button:active,
+.control-center .play-toggle:active {
+    transform: scale(0.9);
+    background: rgba(255, 255, 255, 0.15); /* クリック時は少し濃く */
+}
+
+
+
+/* 個別のサイズ調整 */
+
+/* スキップボタン（少し小さめ） */
+.btn-skip {
+    width: 36px;
+    height: 36px;
+}
+.btn-skip svg {
+    stroke-width: 2.5; /* 線を少し太くして視認性アップ */
+}
+
+/* 再生トグルボタン（主役なので大きく） */
+.play-toggle {
+    width: 48px;  /* 大きめに */
+    height: 48px;
+    /* 元の青い背景指定は削除しましたの */
+}
+
+/* 無効状態のデザイン */
+.btn-skip:disabled,
+.play-toggle.disabled {
+    color: #555; /* 暗くする */
     cursor: not-allowed;
-    box-shadow: none;
-    transform: none;
+    background: transparent !important; /* ホバーエフェクトも無効化 */
+    transform: none !important;
 }
 
-/* 再生ボタン：鮮やかな緑 */
-.btn-play {
-    background: linear-gradient(135deg, #a6e3a1, #56ab2f);
-    color: #111; /* 文字は黒で見やすく */
-}
-.btn-play:hover {
-    background: linear-gradient(135deg, #b6f3b1, #66bb3f);
-    box-shadow: 0 0 15px rgba(166, 227, 161, 0.4);
-}
-
-/* 停止ボタン：警告の赤 */
-.btn-stop {
-    background: linear-gradient(135deg, #f38ba8, #d63031);
-    color: white;
-}
-.btn-stop:hover {
-    background: linear-gradient(135deg, #ff9bb8, #e64041);
-    box-shadow: 0 0 15px rgba(243, 139, 168, 0.4);
-}
 
 /* 右側：時間表示 */
 .control-right {
@@ -271,44 +349,8 @@ input, select {
     color: white;
 }
 
-/* トグルボタンのデザイン */
-.play-toggle {
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    background: #e0e0e0; /* 明るい色で目立たせる */
-    color: #1e1e2e;      /* アイコンは暗く */
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    cursor: pointer;
-    transition: transform 0.1s, background 0.2s;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-}
 
-.play-toggle:hover {
-    background: #fff;
-    transform: scale(1.05);
-}
 
-.play-toggle:active {
-    transform: scale(0.95);
-}
-
-/* 再生中のスタイル（任意：色を変えるなど） */
-.play-toggle.playing {
-    background: #89b4fa; /* 再生中はアクセントカラーに */
-    color: #fff;
-}
-
-.play-toggle.disabled {
-    background: #555;       /* 暗くする */
-    color: #888;            /* アイコンも暗く */
-    cursor: not-allowed;    /* カーソルを禁止マークに */
-    pointer-events: none;   /* クリックを物理的に無効化 */
-    box-shadow: none;
-    transform: none;
-}
 
 .log-panel {
     flex: 1;
@@ -332,11 +374,13 @@ input, select {
     color: #fff;
     border-bottom: 1px solid #333;
     font-family: 'Segoe UI', sans-serif; /* ヘッダーはUIフォントで */
+    
     display: flex;
+    justify-content: space-between; /* 文字は左、ボタンは右へ */
     align-items: center;
 }
-/* 左上のアイコンっぽさを出す装飾 */
-.log-panel h3::before {
+
+.log-panel h3 span::before {
     content: '>_';
     margin-right: 8px;
     color: #89b4fa;
@@ -378,21 +422,6 @@ input, select {
     font-weight: bold;
 }
 
-/* ターミナル風スクロールバー */
-#log-box::-webkit-scrollbar {
-    width: 8px;
-}
-#log-box::-webkit-scrollbar-track {
-    background: transparent;
-}
-#log-box::-webkit-scrollbar-thumb {
-    background-color: #444;
-    border-radius: 4px;
-}
-#log-box::-webkit-scrollbar-thumb:hover {
-    background-color: #555;
-}
-
 footer {
     margin-top: 10px;
     background: var(--panel-color);
@@ -400,22 +429,7 @@ footer {
     border-radius: 8px;
 }
 
-.progress-bar-container {
-    height: 6px;
-    background: #444;
-    margin: 10px 0;
-    border-radius: 3px;
-    overflow: hidden;
-}
-.progress-bar {
-    height: 100%;
-    width: 0%;
-    background: var(--accent-color);
-    transition: width 0.1s linear;
-}
-
-.btn-play { background: linear-gradient(135deg, #a6e3a1, #56ab2f); color: #111; font-weight: bold; }
-.btn-stop { background: linear-gradient(135deg, #f38ba8, #d63031); color: white; font-weight: bold; }
+    
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 
@@ -531,4 +545,211 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-save {
     background: linear-gradient(135deg, #89b4fa, #5e81ac);
     font-weight: bold;
+}
+
+/* ▼▼▼ ホットキー入力欄の装飾 ▼▼▼ */
+.hotkey-input {
+    flex: 1;
+    background: #111;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 4px 8px;
+    min-width: 150px;
+    min-height: 28px; /* 高さを確保 */
+    display: flex;
+    align-items: center;
+    gap: 6px; /* バッジ間の隙間 */
+    cursor: text;
+    outline: none;
+    overflow-x: auto; /* たくさん押してもはみ出さない */
+    color: #888; /* プレースホルダーの色 */
+}
+
+/* プレースホルダー（中身が空っぽの時だけ文字を出す） */
+.hotkey-input:empty::before {
+    content: attr(data-placeholder);
+    font-size: 0.9rem;
+}
+
+.hotkey-input:focus {
+    border-color: #89b4fa;
+    background: #1e1e2e;
+    color: #fff;
+}
+
+/* キーバッジのデザイン */
+.kbd-badge {
+    background: #333;
+    border: 1px solid #555;
+    border-bottom: 3px solid #555; /* 立体感 */
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-family: 'Consolas', monospace;
+    font-size: 0.9rem;
+    font-weight: bold;
+    color: #fff;
+    white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    text-shadow: 0 1px 1px rgba(0,0,0,0.5);
+}
+
+/* 修飾キーごとの色分け（お好みで！） */
+.kbd-badge.ctrl { color: #f38ba8; border-color: #f38ba8; background: #2a1a1f; }
+.kbd-badge.shift { color: #a6e3a1; border-color: #a6e3a1; background: #1a2a1f; }
+.kbd-badge.alt { color: #fab387; border-color: #fab387; background: #2a221a; }
+
+
+/* ▼▼▼ クリアボタンのスタイル（SVG対応版） ▼▼▼ */
+.btn-clear-log {
+    background: transparent;
+    border: none;
+    color: #666; /* 通常時の色（少し控えめに） */
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    
+    /* フレックスボックスでアイコンをど真ん中に */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-clear-log svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor; /* 親の文字色を引き継ぐ */
+}
+
+.btn-clear-log:hover {
+    background: rgba(243, 139, 168, 0.2); /* ホバー時は薄い赤背景 */
+    color: #f38ba8; /* アイコンを赤くする（ゴミ箱っぽく） */
+    transform: scale(1.1);
+}
+
+/* ▼▼▼ イベントリスト内のバッジ配置調整 ▼▼▼ */
+.event-row > div:nth-child(3) {
+    display: flex;       /* バッジを横並びに */
+    gap: 5px;            /* バッジ同士の間隔 */
+    flex-wrap: wrap;     /* 幅が足りなくなったら折り返す */
+    align-items: center; /* 縦方向の真ん中揃え */
+}
+
+/* テーブル内のバッジは少し小さめでもいいかも（お好みで調整） */
+.event-row .kbd-badge {
+    font-size: 0.8rem;
+    padding: 1px 6px;
+}
+
+
+/* ▼▼▼ Type列のバッジ装飾 ▼▼▼ */
+.type-badge {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px; /* 丸っこくする */
+    font-size: 0.75rem;
+    font-weight: bold;
+    text-transform: uppercase; /* 小文字でも大文字表示にする */
+    letter-spacing: 0.5px;
+}
+
+/* PRESS (キー押下) の色：青系 */
+.type-badge.press {
+    background: rgba(137, 180, 250, 0.15);
+    color: #89b4fa;
+    border: 1px solid rgba(137, 180, 250, 0.3);
+}
+
+/* PAUSE (一時停止) の色：赤系 */
+.type-badge.pause {
+    background: rgba(243, 139, 168, 0.15);
+    color: #f38ba8;
+    border: 1px solid rgba(243, 139, 168, 0.3);
+}
+
+
+
+
+/* ▼▼▼ 全体のスクロールバーをモダンに統一 ▼▼▼ */
+
+/* スクロールバー全体の幅と高さ */
+::-webkit-scrollbar {
+    width: 10px;  /* 縦スクロールバーの幅 */
+    height: 10px; /* 横スクロールバーの高さ */
+}
+
+/* スクロールバーの軌道（背景） */
+::-webkit-scrollbar-track {
+    background: transparent; /* 背景になじませる */
+}
+
+/* スクロールバーの持ち手（動く部分） */
+::-webkit-scrollbar-thumb {
+    background-color: #444; /* 落ち着いたグレー */
+    border-radius: 5px;     /* 丸くする */
+    border: 2px solid #1e1e2e; /* 余白を作って「浮いている」感じにする */
+}
+
+/* 持ち手にマウスを乗せた時 */
+::-webkit-scrollbar-thumb:hover {
+    background-color: #555; /* 少し明るく */
+}
+
+/* 持ち手を掴んでいる時 */
+::-webkit-scrollbar-thumb:active {
+    background-color: #89b4fa; /* アクセントカラー（青）に光る！ */
+}
+
+/* 角っこ（縦と横が交わるところ） */
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+
+
+/* ターミナル風スクロールバー */
+#log-box::-webkit-scrollbar {
+    width: 8px;
+}
+#log-box::-webkit-scrollbar-track {
+    background: transparent;
+}
+#log-box::-webkit-scrollbar-thumb {
+    background-color: #444;
+    border-radius: 4px;
+}
+#log-box::-webkit-scrollbar-thumb:hover {
+    background-color: #555;
+}
+
+header {
+    display: flex;
+    justify-content: space-between; /* タイトルとボタンを左右端に */
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+header h1 {
+    margin: 0; /* 余白はheader側で制御するので0に */
+    /* font-sizeなどは元のままでOK */
+}
+
+/* ▼▼▼ 設定ボタンのデザイン ▼▼▼ */
+.btn-settings {
+    background: transparent;
+    border: none;
+    color: #666;
+    padding: 5px;
+    cursor: pointer;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.btn-settings:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+    transform: rotate(90deg); /* ホバーで回転させる遊び心ですの！ */
 }

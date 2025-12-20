@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>VTS Hotkey Player (Eel)</title>
+    <title>VTS Hotkey Player</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
     <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.min.js"></script>
@@ -10,6 +10,17 @@
     <script defer src="main.js"></script>
 </head>
 <body>
+    <div id="modal-settings" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h3>設定</h3>
+            <div class="settings-body" style="color: #ccc; margin-bottom: 20px;">
+                <p>まだ設定項目はありません</p>
+                </div>
+            <div class="modal-buttons" style="justify-content: flex-end;">
+                <button class="btn-cancel" onclick="closeSettingsModal()">閉じる</button>
+            </div>
+        </div>
+    </div>
     <div id="loading-overlay" class="loading-overlay" style="display: none;">
         <div class="loading-content">
             <div class="spinner"></div>
@@ -19,16 +30,42 @@
 <div class="container">
     <header>
         <h1>VTS Hotkey Player</h1>
+        <button class="btn-settings" onclick="openSettingsModal()" title="設定">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+        </button>
     </header>
 
     <div class="control-panel">
-        <div class="file-group">
-            <button onclick="pickAudio()">音声ファイル選択</button>
-            <span id="audio-path-display">未選択</span>
+        <div class="toolbar-group">
+            <button class="toolbar-btn" onclick="pickAudio()">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle>
+                </svg>
+                <span>音声を選択する</span>
+            </button>
+            <div id="audio-status" class="file-status" title="未選択">
+                未選択
+            </div>
         </div>
-        <div class="file-group">
-             <button id="btn-save" onclick="saveBundle()">Bundle保存</button>
-             <button onclick="loadBundle()">Bundle読み込み</button>
+
+        <div class="toolbar-divider"></div>
+
+        <div class="toolbar-group">
+            <button class="toolbar-btn" onclick="loadBundle()">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+                <span>バンドル読込</span>
+            </button>
+            <button id="btn-save" class="toolbar-btn" onclick="saveBundle()">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline>
+                </svg>
+                <span>バンドル保存</span>
+            </button>
         </div>
     </div>
 
@@ -49,13 +86,21 @@
                     <option value="press">キー押下</option>
                     <option value="pause">一時停止</option>
                 </select>
-                <input type="text" id="in-key" placeholder="キー (1, F1, a...)">
+                <div id="in-key" class="hotkey-input" tabindex="0" data-placeholder="キーを押してください"></div>
                 <button id="btn-add" class="btn-add" onclick="addEvent()">追加</button>
             </div>
         </div>
 
         <div class="log-panel">
-            <h3>Log</h3>
+            <h3>
+                <span>Log</span>
+                <button class="btn-clear-log" onclick="clearLog()" title="ログをクリア">
+                    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="3 6 5 6 21 6"></polyline>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                </button>
+            </h3>
             <div id="log-box"></div>
         </div>
     </div>
@@ -63,11 +108,17 @@
     <footer class="player-bar">
         <div id="waveform-container" class="player-waveform">
             <div id="waveform"></div>
-            <div id="waveform-loading">Loading...</div>
+            <div id="waveform-loading">(ここに波形が表示されます)</div>
         </div>
 
         <div class="player-controls">
             <div class="control-center">
+                <button id="btn-skip-back" class="btn-skip" onclick="skipBackward()" title="10秒戻る">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/>
+                    </svg>
+                </button>
+
                 <div id="btn-toggle" class="play-toggle" onclick="togglePlayback()">
                     <svg id="icon-play" viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
                         <path d="M8 5v14l11-7z"/>
@@ -76,10 +127,16 @@
                         <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
                     </svg>
                 </div>
+
+                <button id="btn-skip-fwd" class="btn-skip" onclick="skipForward()" title="10秒進む">
+                    <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M13 17l5-5-5-5M6 17l5-5-5-5"/>
+                    </svg>
+                </button>
             </div>
 
             <div class="control-right">
-                <div id="time-display" class="time-display">00:00.000</div>
+                <div id="time-display" class="time-display">00.000s</div>
             </div>
         </div>
     </footer>
@@ -103,7 +160,7 @@
         </div>
         <div class="input-group">
             <label>Key:</label>
-            <input type="text" id="modal-key" placeholder="キー (例: a, F1)">
+            <div id="modal-key" class="hotkey-input" tabindex="0" data-placeholder="キーを押してください"></div>
         </div>
         <div class="modal-buttons">
             <button class="btn-cancel" onclick="closeEventModal()">キャンセル</button>
