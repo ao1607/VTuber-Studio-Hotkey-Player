@@ -1,8 +1,15 @@
-import eel
 import sys
 import os
+# DLLの場所を通すおまじない
+
+dll_path = os.path.dirname(sys.executable)
+if os.path.isdir(dll_path):
+    os.add_dll_directory(dll_path)
+    # おまじない：環境変数 PATH にも追加しておくのですの
+    os.environ['PATH'] = dll_path + os.pathsep + os.environ.get('PATH', '')
+
+import eel
 import json
-import threading
 import keyboard
 import shutil
 import tempfile
@@ -12,6 +19,8 @@ from pathlib import Path
 import subprocess
 import bottle
 import time
+
+eel.init('web')
 
 
 

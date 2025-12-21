@@ -4,3 +4,5 @@ VTS_Hotkey_Player.spec
 build
 dist
 temp_audio
+VTS_Player_pack
+*.zip

@@ -1,2 +1,4 @@
 keyboard
 pygetwindow
+eel
+bottle
