@@ -126,7 +126,7 @@ def _show_powershell_dialog(cmd):
 def select_audio_file():
     cmd = """
     $f = New-Object System.Windows.Forms.OpenFileDialog;
-    $f.Filter = 'Audio Files (*.wav;*.mp3;*.ogg)|*.wav;*.mp3;*.ogg|All Files (*.*)|*.*';
+    $f.Filter = 'Audio Files (*.wav;*.mp3;*.ogg;*.m4a)|*.wav;*.mp3;*.ogg;*.m4a|All Files (*.*)|*.*';
     $f.Title = '音声ファイルを選択してくれですの';
     $d = New-Object System.Windows.Forms.Form;
     $d.TopMost = $true;
