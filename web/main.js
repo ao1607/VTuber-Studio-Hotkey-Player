@@ -20,9 +20,6 @@ let appConfig = {
 
 
 
-
-
-
 function updateNextEventIndex() {
     const currentTime = wavesurfer.getCurrentTime();
     nextEventIndex = 0;

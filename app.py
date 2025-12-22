@@ -374,129 +374,6 @@ def check_for_updates():
     return {"update_available": False}
 
 
-@eel.expose
-def perform_update(download_url):
-    """
-    更新を実行する（Embedded Python対応版）
-    """
-    if not download_url:
-        return False
-
-    try:
-        eel.set_update_progress_js(0, "接続中...")
-
-        # --- 1. ZIPダウンロード ---
-        # (ここは変更なし)
-        response = requests.get(download_url, stream=True)
-        total_length = response.headers.get('content-length')
-        
-        zip_path = os.path.join(TEMP_DIR, "update.zip")
-        
-        if total_length is None:
-            with open(zip_path, 'wb') as f:
-                f.write(response.content)
-        else:
-            dl = 0
-            total_length = int(total_length)
-            with open(zip_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    dl += len(chunk)
-                    f.write(chunk)
-                    percent = int(100 * dl / total_length)
-                    eel.set_update_progress_js(percent, f"ダウンロード中... ({percent}%)")
-
-        eel.set_update_progress_js(100, "解凍しています...")
-        
-        # --- 2. 解凍 ---
-        extract_dir = os.path.join(TEMP_DIR, "update_extracted")
-        if os.path.exists(extract_dir):
-            shutil.rmtree(extract_dir)
-        os.makedirs(extract_dir)
-
-        with zipfile.ZipFile(zip_path, 'r') as zf:
-            zf.extractall(extract_dir)
-
-        # --- 3. パスと再起動コマンドの準備 ---
-        eel.set_update_progress_js(100, "更新プログラムを作成中...")
-
-        # アプリのルートディレクトリ（app.pyがある場所）
-        app_root_dir = os.path.dirname(os.path.abspath(__file__))
-        script_path = os.path.abspath(__file__)
-
-        # ★★★ ここが埋め込みPython検索ロジックですの ★★★
-        # "python-*-embed-amd64" みたいなフォルダを探して、その中の pythonw.exe を使う
-        # globを使えば "x.xx.x" の部分が何であっても見つけてくれるぞ！
-        
-        search_pattern = os.path.join(app_root_dir, "python-*-embed-amd64", "pythonw.exe")
-        found_pythonw = glob.glob(search_pattern)
-
-        if found_pythonw:
-            # 見つかったらそれを使う（リストの先頭）
-            pythonw_exe = found_pythonw[0]
-        else:
-            # 万が一見つからなかったら、今の実行環境の python.exe を pythonw.exe に変えたものを使う（保険）
-            pythonw_exe = sys.executable.replace("python.exe", "pythonw.exe")
-            if not os.path.exists(pythonw_exe):
-                pythonw_exe = sys.executable # 最悪コンソールが出ても動けばヨシとする
-
-        # 再起動コマンド
-        restart_cmd = f'start "" "{pythonw_exe}" "{script_path}"'
-
-
-        pid = os.getpid()
-        extract_dir_abs = os.path.abspath(extract_dir)
-        app_root_dir_abs = os.path.abspath(app_root_dir)
-
-        # --- 4. バッチファイル作成 ---
-        commands = [
-            "@echo off",
-            "title Updating...",
-            f"echo Closing old process (PID: {pid})...",
-            f"taskkill /PID {pid} /T /F", 
-            "echo Waiting for release...",
-            "ping 127.0.0.1 -n 3 > nul",
-        ]
-
-        # webフォルダ同期
-        if os.path.exists(os.path.join(extract_dir, "web")):
-            commands.append("echo Syncing web folder...")
-            cmd = f'robocopy "{extract_dir_abs}\\web" "{app_root_dir_abs}\\web" /MIR /NFL /NDL /NJH /NJS'
-            commands.append(cmd)
-            commands.append("if %ERRORLEVEL% LEQ 8 set ERRORLEVEL=0")
-
-        # ファイル更新
-        commands.append("echo Updating application files...")
-        commands.append(f'xcopy /Y "{extract_dir_abs}\\*.py" "{app_root_dir_abs}\\"')
-        commands.append(f'xcopy /Y "{extract_dir_abs}\\*.vbs" "{app_root_dir_abs}\\"')
-        
-        # ★もし更新データに新しいPythonフォルダが含まれていたら、それもコピーする？
-        # Embedded版ごと更新するなら、ここにもコピー処理が必要だけど、
-        # 今回は「スクリプトの更新」だけと仮定しておくぞ。
-
-        # 再起動
-        commands.append("echo Restarting application...")
-        commands.append(restart_cmd)
-        
-        commands.append('start /b "" cmd /c "ping -n 2 127.0.0.1 > nul & del "%~f0""') 
-        commands.append('exit')
-
-        bat_content = "\n".join(commands)
-        bat_path = os.path.join(app_root_dir, "updater.bat")
-        
-        with open(bat_path, "w", encoding="cp932") as f:
-            f.write(bat_content)
-
-        eel.set_update_progress_js(100, "再起動しますの！さようなら...")
-        time.sleep(1) 
-
-        subprocess.Popen([bat_path], shell=True)
-
-    except Exception as e:
-        eel.js_log(f"更新エラー: {e}")
-        eel.set_update_progress_js(0, f"エラー: {e}")
-        return False
-
-
 
 @eel.expose
 def get_version():
@@ -594,7 +471,7 @@ def perform_update(download_url):
             "@echo off",
             "title Updating...",
             f"echo Closing old process (PID: {pid})...",
-            f"taskkill /PID {pid} /F",
+            f"taskkill /PID {pid} /F /T",
             "echo Waiting for release...",
             "ping 127.0.0.1 -n 3 > nul",
         ]
@@ -625,7 +502,6 @@ def perform_update(download_url):
         time.sleep(1) # ユーザーがメッセージを読む時間を少しだけ作る
 
         subprocess.Popen([bat_path], shell=True)
-        os._exit(0)
 
     except Exception as e:
         # エラー時はアラートを出すなどの処理を入れてもいいかも
