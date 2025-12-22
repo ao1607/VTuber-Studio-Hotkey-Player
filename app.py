@@ -452,7 +452,7 @@ def perform_update(download_url):
             "@echo off",
             "title Updating...",
             f"echo Closing old process (PID: {pid})...",
-            f"taskkill /PID {pid} /F",
+            f"taskkill /PID {pid} /T /F", 
             "echo Waiting for release...",
             "ping 127.0.0.1 -n 3 > nul",
         ]
@@ -490,7 +490,6 @@ def perform_update(download_url):
         time.sleep(1) 
 
         subprocess.Popen([bat_path], shell=True)
-        os._exit(0)
 
     except Exception as e:
         eel.js_log(f"更新エラー: {e}")
