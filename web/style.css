@@ -827,6 +827,8 @@ header h1 {
 /* ▼▼▼ レンジスライダー（つまみ）のカスタムデザイン ▼▼▼ */
 input[type=range] {
     -webkit-appearance: none; /* デフォルトの見た目を消す */
+    -moz-appearance: none;
+    appearance: none;
     width: 120px;
     background: transparent;
     cursor: pointer;

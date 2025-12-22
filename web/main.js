@@ -49,6 +49,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     loadSettings();
     initVersion();
+
+    checkUpdate(true);
     
     document.addEventListener('contextmenu', (e) => {
         e.preventDefault();
@@ -950,9 +952,8 @@ let pendingUpdateUrl = ""; // 更新用URLを一時保存する場所
 // 1. 更新チェックボタンが押されたら呼ばれる関数
 // main.js の checkUpdate 関数
 
-async function checkUpdate() {
-    const modal = document.getElementById('modal-update');
-    
+async function checkUpdate(isAuto = false) {
+    const modal = document.getElementById('modal-update');    
     const msgEl = document.getElementById('update-message');
     const curVerEl = document.getElementById('disp-current-ver');
     const latVerEl = document.getElementById('disp-latest-ver');
@@ -973,22 +974,23 @@ async function checkUpdate() {
             <line x1="5" y1="15" x2="19" y2="15"></line>
         </svg>`;
 
-    // --- UI初期化 ---
-    modal.style.display = 'flex';
-    msgEl.innerText = "GitHubを確認しています...";
-    msgEl.style.color = "#ccc";
-    
-    curVerEl.innerText = "-";
-    latVerEl.innerText = "-";
-    latVerEl.style.color = "#888";
-    
-    // 初期状態は非表示
-    arrowEl.style.display = 'none';
-    arrowEl.innerHTML = ""; 
+if (!isAuto) {
+        modal.style.display = 'flex';
+        msgEl.innerText = "GitHubを確認しています...";
+        msgEl.style.color = "#ccc";
+        
+        curVerEl.innerText = "-";
+        latVerEl.innerText = "-";
+        latVerEl.style.color = "#888";
+        
+        arrowEl.style.display = 'none';
+        arrowEl.innerHTML = ""; 
 
-    logEl.style.display = 'none';
-    logEl.innerText = "";
-    btnUpdate.style.display = 'none';
+        logEl.style.display = 'none';
+        logEl.innerText = "";
+        btnUpdate.style.display = 'none';
+    }
+    
     pendingUpdateUrl = "";
 
     // --- Pythonへ問い合わせ ---
@@ -996,11 +998,23 @@ async function checkUpdate() {
 
     // 結果判定
     if (result.error) {
+        // 自動チェックでエラーなら何もしない（裏で失敗するだけ）
+        if (isAuto) return;
+
         msgEl.innerText = "エラーが発生しました";
         msgEl.style.color = "#f38ba8";
         latVerEl.innerText = "Error";
         return;
     }
+
+    // ここで初めて、自動チェックでも「更新があるなら」モーダルを表示する準備をする
+    if (isAuto && !result.update_available) {
+        // 自動チェックかつ更新なし → 何もせず終了
+        return;
+    }
+
+    // ここまで来たらモーダルを表示（自動チェックで更新あり、または手動チェック）
+    modal.style.display = 'flex'; 
 
     curVerEl.innerText = result.current_version;
 
@@ -1017,7 +1031,6 @@ async function checkUpdate() {
         latVerEl.innerText = result.latest_version;
         latVerEl.style.color = "#a6e3a1"; 
 
-        // 矢印SVGを表示（色は少し目立つ青）
         arrowEl.innerHTML = SVG_ARROW;
         arrowEl.style.color = "#89b4fa"; 
 
@@ -1028,15 +1041,37 @@ async function checkUpdate() {
             pendingUpdateUrl = result.download_url;
             btnUpdate.style.display = 'block';
         }
+
+    } else if (result.is_dev_version) {
+        // ★現在バージョンの方が新しい場合（開発版）
+        msgEl.innerText = "（これは開発中のバージョンです）";
+        msgEl.style.color = "#fab387"; // オレンジ色で注意喚起っぽく
+
+        latVerEl.innerText = result.latest_version;
+        latVerEl.style.color = "#888"; // 最新版は「過去」なので少し暗く
+
+        // 逆矢印とか、Devっぽいアイコンにしてもいいけど、とりあえず "←" にしますの
+        arrowEl.innerHTML = `
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>`;
+        arrowEl.style.color = "#fab387"; 
+
+        logEl.innerText = "GitHub上の最新リリースよりも先のバージョンを使っています。\nバグに気をつけてください。";
+        logEl.style.display = 'block';
+        
+        // 更新ボタンは出さない
+        btnUpdate.style.display = 'none';
+
     } else {
-        // ★最新の場合
+        // ★最新の場合（手動チェックの時のみここに来る）
         msgEl.innerText = "現在は最新版です";
         msgEl.style.color = "#89b4fa"; // 青
 
         latVerEl.innerText = result.current_version; 
         latVerEl.style.color = "#89b4fa"; 
         
-        // イコールSVGを表示（色は控えめなグレー）
         arrowEl.innerHTML = SVG_EQUAL;
         arrowEl.style.color = "#666"; 
     }

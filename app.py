@@ -23,7 +23,7 @@ import time
 import requests
 from packaging import version
 
-CURRENT_VERSION = "v2.2.1" 
+CURRENT_VERSION = "v2.3.2" 
 REPO_OWNER = "ao1607"
 REPO_NAME = "VTube-Studio-Hotkey-Player"
 
@@ -310,33 +310,65 @@ def focus_window_py():
 @eel.expose
 def check_for_updates():
     """
-    GitHubから最新バージョンを確認する
+    GitHubから最新バージョンを確認する（リトライ機能付き）
     戻り値: { "update_available": bool, "latest_version": str, "url": str, "body": str }
     """
-    try:
-        api_url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases/latest"
-        response = requests.get(api_url, timeout=5)
-        
-        if response.status_code == 200:
-            data = response.json()
-            latest_tag = data.get("tag_name", "v0.0.0")
+    api_url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases/latest"
+    max_retries = 3  # 最大3回までチャレンジしますの
+    
+    for attempt in range(max_retries):
+        try:
+            # リクエスト送信（タイムアウトは10秒）
+            response = requests.get(api_url, timeout=10)
             
-            # バージョン比較 (v1.0.0 などを解析して比較)
-            if version.parse(latest_tag) > version.parse(CURRENT_VERSION):
-                return {
-                    "update_available": True,
-                    "current_version": CURRENT_VERSION,
-                    "latest_version": latest_tag,
-                    "url": data.get("html_url"),
-                    "body": data.get("body", ""),
-                    # zipのDLリンクを探す (assetsの最初のzipを取得する簡易実装)
-                    "download_url": next((asset["browser_download_url"] for asset in data["assets"] if asset["name"].endswith(".zip")), None)
-                }
+            # 通信成功！ (ステータスコード200)
+            if response.status_code == 200:
+                data = response.json()
+                latest_tag = data.get("tag_name", "v0.0.0")
+
+                v_current = version.parse(CURRENT_VERSION)
+                v_latest = version.parse(latest_tag)
+                
+                # バージョン比較
+                if v_latest > v_current:
+                    return {
+                        "update_available": True,
+                        "current_version": CURRENT_VERSION,
+                        "latest_version": latest_tag,
+                        "url": data.get("html_url"),
+                        "body": data.get("body", ""),
+                        # zipのDLリンクを探す
+                        "download_url": next((asset["browser_download_url"] for asset in data["assets"] if asset["name"].endswith(".zip")), None)
+                    }
+                elif v_current > v_latest:
+                    # ★ここが追加点：現在バージョンの方が新しい場合（開発版）
+                    return {
+                        "update_available": False,
+                        "is_dev_version": True, # これが目印ですの
+                        "current_version": CURRENT_VERSION,
+                        "latest_version": latest_tag
+                    }
+                else:
+                    return {"update_available": False, "current_version": CURRENT_VERSION}
+            
+            # 200以外が返ってきたら、リトライせずにループを抜けますの（API制限など）
+            break
+
+        except requests.exceptions.RequestException as e:
+            # タイムアウトや接続エラーなど
+            print(f"Update check failed (Attempt {attempt+1}/{max_retries}): {e}")
+            
+            if attempt < max_retries - 1:
+                time.sleep(2)  # 2秒待ってから再試行しますの
+                continue
             else:
-                return {"update_available": False, "current_version": CURRENT_VERSION}
-    except Exception as e:
-        print(f"Update Check Error: {e}")
-        return {"error": str(e)}
+                # 3回やってもダメならエラーを返しますの
+                return {"error": str(e)}
+
+        except Exception as e:
+            # その他の予期せぬエラー
+            print(f"Update Check Error: {e}")
+            return {"error": str(e)}
     
     return {"update_available": False}
 
@@ -427,7 +459,13 @@ def perform_update(download_url):
         # 5. 再起動処理
         commands.append("echo Restarting application...")
         commands.append(f'start "" "{current_exe}"')
-        commands.append('del "%~f0"') # バッチ自身を削除
+
+
+        # 自分自身(updater.bat)を削除する処理を、別プロセスに投げて自分はさっさと終了する
+        # ping で2回ほど待機してから del するコマンドを裏で実行させる
+        commands.append('start /b "" cmd /c "ping -n 2 127.0.0.1 > nul & del "%~f0""') 
+        commands.append('exit')
+
 
         # バッチファイルを書き込み
         bat_content = "\n".join(commands)

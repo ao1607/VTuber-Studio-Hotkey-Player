@@ -6,3 +6,5 @@ dist
 temp_audio
 VTS_Player_pack
 *.zip
+python-*
+start.vbs
