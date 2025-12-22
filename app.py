@@ -19,11 +19,12 @@ from pathlib import Path
 import subprocess
 import bottle
 import time
+import glob
 
 import requests
 from packaging import version
 
-CURRENT_VERSION = "v2.3.0" 
+CURRENT_VERSION = "v2.3.1"
 REPO_OWNER = "ao1607"
 REPO_NAME = "VTube-Studio-Hotkey-Player"
 
@@ -372,31 +373,41 @@ def check_for_updates():
     
     return {"update_available": False}
 
-# --- app.py の perform_update 関数を書き換え ---
 
 @eel.expose
 def perform_update(download_url):
     """
-    更新を実行する
-    1. ZIPダウンロード & 解凍
-    2. 新しいファイル構成を確認
-    3. 同期・削除・コピーを行うバッチファイルを生成して実行
+    更新を実行する（Embedded Python対応版）
     """
     if not download_url:
         return False
 
     try:
-        eel.js_log("最新版をダウンロードしていますの...")
-        
-        # 1. ZIPをダウンロード
+        eel.set_update_progress_js(0, "接続中...")
+
+        # --- 1. ZIPダウンロード ---
+        # (ここは変更なし)
         response = requests.get(download_url, stream=True)
+        total_length = response.headers.get('content-length')
+        
         zip_path = os.path.join(TEMP_DIR, "update.zip")
         
-        with open(zip_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
+        if total_length is None:
+            with open(zip_path, 'wb') as f:
+                f.write(response.content)
+        else:
+            dl = 0
+            total_length = int(total_length)
+            with open(zip_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    dl += len(chunk)
+                    f.write(chunk)
+                    percent = int(100 * dl / total_length)
+                    eel.set_update_progress_js(percent, f"ダウンロード中... ({percent}%)")
 
-        # 2. 解凍先（一時フォルダ）
+        eel.set_update_progress_js(100, "解凍しています...")
+        
+        # --- 2. 解凍 ---
         extract_dir = os.path.join(TEMP_DIR, "update_extracted")
         if os.path.exists(extract_dir):
             shutil.rmtree(extract_dir)
@@ -405,85 +416,87 @@ def perform_update(download_url):
         with zipfile.ZipFile(zip_path, 'r') as zf:
             zf.extractall(extract_dir)
 
-        # 3. アップデーターバッチファイルの作成
-        current_exe = sys.executable
-        current_dir = os.path.dirname(current_exe)
+        # --- 3. パスと再起動コマンドの準備 ---
+        eel.set_update_progress_js(100, "更新プログラムを作成中...")
+
+        # アプリのルートディレクトリ（app.pyがある場所）
+        app_root_dir = os.path.dirname(os.path.abspath(__file__))
+        script_path = os.path.abspath(__file__)
+
+        # ★★★ ここが埋め込みPython検索ロジックですの ★★★
+        # "python-*-embed-amd64" みたいなフォルダを探して、その中の pythonw.exe を使う
+        # globを使えば "x.xx.x" の部分が何であっても見つけてくれるぞ！
         
-        # バッチファイルのコマンドをリストで構築
+        search_pattern = os.path.join(app_root_dir, "python-*-embed-amd64", "pythonw.exe")
+        found_pythonw = glob.glob(search_pattern)
+
+        if found_pythonw:
+            # 見つかったらそれを使う（リストの先頭）
+            pythonw_exe = found_pythonw[0]
+        else:
+            # 万が一見つからなかったら、今の実行環境の python.exe を pythonw.exe に変えたものを使う（保険）
+            pythonw_exe = sys.executable.replace("python.exe", "pythonw.exe")
+            if not os.path.exists(pythonw_exe):
+                pythonw_exe = sys.executable # 最悪コンソールが出ても動けばヨシとする
+
+        # 再起動コマンド
+        restart_cmd = f'start "" "{pythonw_exe}" "{script_path}"'
+
+
+        pid = os.getpid()
+        extract_dir_abs = os.path.abspath(extract_dir)
+        app_root_dir_abs = os.path.abspath(app_root_dir)
+
+        # --- 4. バッチファイル作成 ---
         commands = [
             "@echo off",
             "title Updating...",
-            "echo Waiting for the application to close...",
-            "ping 127.0.0.1 -n 3 > nul",  # アプリ終了待ち
+            f"echo Closing old process (PID: {pid})...",
+            f"taskkill /PID {pid} /F",
+            "echo Waiting for release...",
+            "ping 127.0.0.1 -n 3 > nul",
         ]
 
-        # パスを絶対パスに変換（バッチでのトラブル防止）
-        extract_dir_abs = os.path.abspath(extract_dir)
-        current_dir_abs = os.path.abspath(current_dir)
-
-        # ▼▼▼ 1. webフォルダの同期（ミラーリング） ▼▼▼
-        # 新しいZIPに 'web' フォルダがある場合のみ実行
+        # webフォルダ同期
         if os.path.exists(os.path.join(extract_dir, "web")):
             commands.append("echo Syncing web folder...")
-            # robocopy /MIR ... フォルダを完全同期（古いファイルは削除される）
-            # /NFL /NDL /NJH /NJS ... ログを抑制して画面を綺麗に
-            cmd = f'robocopy "{extract_dir_abs}\\web" "{current_dir_abs}\\web" /MIR /NFL /NDL /NJH /NJS'
+            cmd = f'robocopy "{extract_dir_abs}\\web" "{app_root_dir_abs}\\web" /MIR /NFL /NDL /NJH /NJS'
             commands.append(cmd)
-            # robocopyは成功時にエラーコード1などを返す仕様なので、エラー判定をリセットする
             commands.append("if %ERRORLEVEL% LEQ 8 set ERRORLEVEL=0")
 
-        # ▼▼▼ 2. Pythonランタイムフォルダの入替 ▼▼▼
-        # 新しいZIPに 'python-x.x.x...' フォルダが含まれているかチェック
-        has_new_python = any(f.startswith("python-") and os.path.isdir(os.path.join(extract_dir, f)) for f in os.listdir(extract_dir))
+        # ファイル更新
+        commands.append("echo Updating application files...")
+        commands.append(f'xcopy /Y "{extract_dir_abs}\\*.py" "{app_root_dir_abs}\\"')
+        commands.append(f'xcopy /Y "{extract_dir_abs}\\*.vbs" "{app_root_dir_abs}\\"')
         
-        if has_new_python:
-            commands.append("echo Updating Python runtime...")
-            # 現在のフォルダにある 'python-*' というフォルダを全て削除
-            commands.append(f'for /d %%i in ("{current_dir_abs}\\python-*") do rmdir /S /Q "%%i"')
-        
-        # ▼▼▼ 3. 特定ファイルの削除チェック (app.py, start.vbs) ▼▼▼
-        # 新しいZIPにこれらのファイルが入っていなければ、古い方を削除する
-        check_files = ["app.py", "start.vbs"]
-        
-        for filename in check_files:
-            if not os.path.exists(os.path.join(extract_dir, filename)):
-                # 新しい方に無いなら、古い方を消すコマンドを追加
-                commands.append(f'if exist "{current_dir_abs}\\{filename}" del /F /Q "{current_dir_abs}\\{filename}"')
+        # ★もし更新データに新しいPythonフォルダが含まれていたら、それもコピーする？
+        # Embedded版ごと更新するなら、ここにもコピー処理が必要だけど、
+        # 今回は「スクリプトの更新」だけと仮定しておくぞ。
 
-        # ▼▼▼ 4. 全ファイルの統合コピー（上書き） ▼▼▼
-        # webフォルダなどはrobocopyで済みだが、念のため全体を上書きコピーして確実に最新にする
-        # （robocopyで消したくない 'temp_audio' などのユーザーデータはこのコマンドでは消えないので安全）
-        commands.append("echo Updating all files...")
-        commands.append(f'xcopy /E /Y "{extract_dir_abs}\\*" "{current_dir_abs}\\"')
-
-        # 5. 再起動処理
+        # 再起動
         commands.append("echo Restarting application...")
-        commands.append(f'start "" "{current_exe}"')
-
-
-        # 自分自身(updater.bat)を削除する処理を、別プロセスに投げて自分はさっさと終了する
-        # ping で2回ほど待機してから del するコマンドを裏で実行させる
+        commands.append(restart_cmd)
+        
         commands.append('start /b "" cmd /c "ping -n 2 127.0.0.1 > nul & del "%~f0""') 
         commands.append('exit')
 
-
-        # バッチファイルを書き込み
         bat_content = "\n".join(commands)
-        bat_path = os.path.join(current_dir, "updater.bat")
+        bat_path = os.path.join(app_root_dir, "updater.bat")
         
         with open(bat_path, "w", encoding="cp932") as f:
             f.write(bat_content)
 
-        eel.js_log("更新準備完了。再起動します。")
-        
-        # バッチ起動して終了
+        eel.set_update_progress_js(100, "再起動しますの！さようなら...")
+        time.sleep(1) 
+
         subprocess.Popen([bat_path], shell=True)
-        time.sleep(1)
-        sys.exit(0)
+        os._exit(0)
 
     except Exception as e:
         eel.js_log(f"更新エラー: {e}")
+        eel.set_update_progress_js(0, f"エラー: {e}")
         return False
+
 
 
 @eel.expose
@@ -511,3 +524,112 @@ if __name__ == "__main__":
         return bottle.static_file(filename, root=TEMP_DIR)
 
     eel.start('index.html', size=(900, 650), cmdline_args=chrome_flags, port=0)
+
+
+# app.py の perform_update 関数を書き換え
+
+@eel.expose
+def perform_update(download_url):
+    """
+    更新を実行する（進捗表示付き・完全版）
+    """
+    if not download_url:
+        return False
+
+    try:
+        # JS側の進捗バーを初期化
+        eel.set_update_progress_js(0, "接続中...")
+
+        # 1. ZIPダウンロード（進捗計算付き）
+        response = requests.get(download_url, stream=True)
+        total_length = response.headers.get('content-length') # 全サイズ取得
+        
+        zip_path = os.path.join(TEMP_DIR, "update.zip")
+        
+        if total_length is None: # サイズ不明の場合
+            with open(zip_path, 'wb') as f:
+                f.write(response.content)
+        else:
+            dl = 0
+            total_length = int(total_length)
+            with open(zip_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    dl += len(chunk)
+                    f.write(chunk)
+                    
+                    # 進捗率を計算してJSへ送る
+                    percent = int(100 * dl / total_length)
+                    # 頻繁に送りすぎると重くなるので、適当に間引いてもいいけど今回はそのまま送る
+                    eel.set_update_progress_js(percent, f"ダウンロード中... ({percent}%)")
+
+        eel.set_update_progress_js(100, "解凍しています...")
+        
+        # 2. 解凍
+        extract_dir = os.path.join(TEMP_DIR, "update_extracted")
+        if os.path.exists(extract_dir):
+            shutil.rmtree(extract_dir)
+        os.makedirs(extract_dir)
+
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            zf.extractall(extract_dir)
+
+        # 3. アップデーターバッチ作成
+        eel.set_update_progress_js(100, "更新プログラムを作成中...")
+
+        current_exe = sys.executable 
+        current_dir = os.path.dirname(current_exe)
+        script_path = os.path.abspath(__file__)
+        app_root_dir = os.path.dirname(script_path)
+        
+        # pythonw.exe のパス生成
+        pythonw_exe = current_exe.replace("python.exe", "pythonw.exe")
+        if not os.path.exists(pythonw_exe):
+            pythonw_exe = current_exe
+
+        pid = os.getpid()
+        extract_dir_abs = os.path.abspath(extract_dir)
+        app_root_dir_abs = os.path.abspath(app_root_dir)
+
+        # --- バッチコマンド作成（前回と同じ） ---
+        commands = [
+            "@echo off",
+            "title Updating...",
+            f"echo Closing old process (PID: {pid})...",
+            f"taskkill /PID {pid} /F",
+            "echo Waiting for release...",
+            "ping 127.0.0.1 -n 3 > nul",
+        ]
+
+        if os.path.exists(os.path.join(extract_dir, "web")):
+            commands.append("echo Syncing web folder...")
+            cmd = f'robocopy "{extract_dir_abs}\\web" "{app_root_dir_abs}\\web" /MIR /NFL /NDL /NJH /NJS'
+            commands.append(cmd)
+            commands.append("if %ERRORLEVEL% LEQ 8 set ERRORLEVEL=0")
+
+        commands.append("echo Updating application files...")
+        commands.append(f'xcopy /Y "{extract_dir_abs}\\*.py" "{app_root_dir_abs}\\"')
+        commands.append(f'xcopy /Y "{extract_dir_abs}\\*.vbs" "{app_root_dir_abs}\\"')
+
+        commands.append("echo Restarting application...")
+        commands.append(f'start "" "{pythonw_exe}" "{script_path}"')
+        commands.append('start /b "" cmd /c "ping -n 2 127.0.0.1 > nul & del "%~f0""') 
+        commands.append('exit')
+        # --------------------------------------
+
+        bat_content = "\n".join(commands)
+        bat_path = os.path.join(app_root_dir, "updater.bat")
+        
+        with open(bat_path, "w", encoding="cp932") as f:
+            f.write(bat_content)
+
+        eel.set_update_progress_js(100, "再起動しますの！さようなら...")
+        time.sleep(1) # ユーザーがメッセージを読む時間を少しだけ作る
+
+        subprocess.Popen([bat_path], shell=True)
+        os._exit(0)
+
+    except Exception as e:
+        # エラー時はアラートを出すなどの処理を入れてもいいかも
+        eel.js_log(f"更新エラー: {e}")
+        eel.set_update_progress_js(0, f"エラー: {e}")
+        return False

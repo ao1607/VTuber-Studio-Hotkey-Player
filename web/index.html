@@ -254,6 +254,13 @@
 
         <div id="update-changelog" class="update-log" style="display:none;"></div>
 
+        <div id="update-progress-area" class="progress-container">
+            <div id="update-progress-bar" class="progress-bar"></div>
+            <div id="update-progress-text" class="progress-text">0%</div>
+        </div>
+
+        <div id="update-status-detail" style="text-align: center; font-size: 0.85rem; color: #ccc; margin-top: 5px; min-height: 1.2em;"></div>
+
         <div class="modal-buttons" style="justify-content: flex-end; gap: 10px;">
             <button class="btn-cancel" onclick="closeUpdateModal()">閉じる</button>
             <button id="btn-do-update" class="btn-save" onclick="executeUpdate()" style="display:none;">

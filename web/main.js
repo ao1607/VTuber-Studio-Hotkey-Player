@@ -476,7 +476,55 @@ function js_log(msg) {
     box.scrollTop = box.scrollHeight;
 }
 
+// ★ 1. Pythonから呼ばれる関数を定義して公開（expose）
+eel.expose(set_update_progress_js);
+function set_update_progress_js(percent, message) {
+    const bar = document.getElementById('update-progress-bar');
+    const text = document.getElementById('update-progress-text');
+    const detail = document.getElementById('update-status-detail');
+
+    // バーの幅を更新
+    if (percent >= 0) {
+        bar.style.width = percent + "%";
+        text.innerText = percent + "%";
+    }
+    
+    // メッセージがあれば更新
+    if (message) {
+        detail.innerText = message;
+    }
+}
+
 // --- UI操作 ---
+
+async function executeUpdate() {
+    if (!pendingUpdateUrl) return;
+
+    const btn = document.getElementById('btn-do-update');
+    const msgEl = document.getElementById('update-message');
+    const progressArea = document.getElementById('update-progress-area'); // 追加
+    
+    if (!confirm("アプリを更新して再起動します。\nよろしいですか？")) {
+        return;
+    }
+
+    // UIを更新モードに切り替え
+    btn.disabled = true;
+    btn.style.display = 'none'; // ボタンを消す
+    document.querySelector('.btn-cancel').style.display = 'none'; // 閉じるボタンも消す（中断不可）
+
+    msgEl.innerText = "更新を実行中ですの...";
+
+    if (progressArea) {
+        progressArea.style.display = 'block';
+    }
+    
+    // プログレスバーを表示
+    progressArea.style.display = 'block';
+    
+    // 更新実行
+    await eel.perform_update(pendingUpdateUrl)();
+}
 
 async function pickAudio() {
 
@@ -1077,38 +1125,6 @@ if (!isAuto) {
     }
 }
 
-// 2. 「今すぐ更新」ボタンが押されたら呼ばれる関数
-async function executeUpdate() {
-    if (!pendingUpdateUrl) return;
-
-    const btn = document.getElementById('btn-do-update');
-    const msgEl = document.getElementById('update-message');
-    
-    if (!confirm("アプリを更新して再起動します。\nよろしいですか？")) {
-        return;
-    }
-
-    // ボタンを無効化してロード中に
-    btn.disabled = true;
-    btn.innerText = "ダウンロード中...";
-    msgEl.innerText = "更新データをダウンロードしていますの...\n終わったら自動で再起動しますの。";
-
-    // 更新実行
-    await eel.perform_update(pendingUpdateUrl)();
-}
-
-// 3. モーダルを閉じる関数
-function closeUpdateModal() {
-    document.getElementById('modal-update').style.display = 'none';
-}
-
-// モーダル背景クリックで閉じる（お好みで追加）
-document.getElementById('modal-update').addEventListener('click', (e) => {
-    if (e.target.id === 'modal-update') {
-        closeUpdateModal();
-    }
-});
-
 
 // ログ出力用ヘルパー（既存のログ機能を使う前提）
 function logToDiv(msg) {
@@ -1140,3 +1156,15 @@ async function initVersion() {
         label.innerText = ver;
     }
 }
+
+// ▼▼▼ アップデートモーダルを閉じる関数（これを追加するのですの！） ▼▼▼
+function closeUpdateModal() {
+    document.getElementById('modal-update').style.display = 'none';
+}
+
+// （おまけ）モーダルの背景（黒い部分）をクリックしても閉じられるようにしておくと便利ですの
+document.getElementById('modal-update').addEventListener('click', (e) => {
+    if (e.target.id === 'modal-update') {
+        closeUpdateModal();
+    }
+});
