@@ -11,19 +11,10 @@ Windows・VTube Studio向けのホットキー押下ユーティリティです�
 
 ## 依存
 - Python 3.11 以降（推奨）
-- `eel`, `pygame`, `keyboard`, `pygetwindow`, `bottle` など（`requirements.txt` を参照）
-- Windows（ファイルダイアログは PowerShell を使用）
+- `eel`, `keyboard`, `pygetwindow`, `bottle` など（`requirements.txt` を参照）
+- Windows10以降で動作確認済み（ファイルダイアログは PowerShell を使用）
 
-## セットアップ
-```powershell
-pip install -r requirements.txt
-```
-
-## 実行
-```powershell
-python ./app.py
-```
-起動するとローカルのブラウザ風 UI が開きます。
+※ リリースにはpython3.12.4の組み込み版を同梱しています。
 
 ## 使い方
 1) **音声を選択**: 「音声を選択する」→ WaveSurfer に波形が表示されます  
@@ -31,10 +22,10 @@ python ./app.py
    - 下部入力欄で時刻・タイプ・キーを入れて「追加」  
    - もしくは波形上で右クリックしてモーダルから追加  
 3) **再生**: 再生ボタン（Space でも可）で開始。イベント時刻でキー送信／一時停止  
-4) **スキップ**: ←/→ ボタンで設定秒数だけ移動  
+4) **スキップ**: ←/→ ボタンで設定秒数だけ移動（デフォルトは10秒）
 5) **保存/読込**: 「バンドル保存／読込」で ZIP にタイムラインと音声をまとめて扱う
 
-## 設定モーダル
+## 設定項目
 - キー押下時間 (秒): VTS が反応しない場合は長めに
 - スキップ時間 (秒): スキップボタンの移動量
 - マスター音量: 波形再生音量
