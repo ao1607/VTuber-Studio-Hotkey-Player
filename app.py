@@ -23,7 +23,7 @@ import time
 import requests
 from packaging import version
 
-CURRENT_VERSION = "v2.3.0" 
+CURRENT_VERSION = "v2.2.0" 
 REPO_OWNER = "ao1607"
 REPO_NAME = "VTube-Studio-Hotkey-Player"
 
