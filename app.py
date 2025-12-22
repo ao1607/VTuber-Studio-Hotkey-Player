@@ -340,10 +340,15 @@ def check_for_updates():
     
     return {"update_available": False}
 
+# --- app.py の perform_update 関数を書き換え ---
+
 @eel.expose
 def perform_update(download_url):
     """
-    更新を実行する（DL -> 解凍 -> bat作成 -> 再起動）
+    更新を実行する
+    1. ZIPダウンロード & 解凍
+    2. 新しいファイル構成を確認
+    3. 同期・削除・コピーを行うバッチファイルを生成して実行
     """
     if not download_url:
         return False
@@ -368,39 +373,72 @@ def perform_update(download_url):
         with zipfile.ZipFile(zip_path, 'r') as zf:
             zf.extractall(extract_dir)
 
-        # ZIPの中身がフォルダに入ってる場合（フォルダ/exe...）と、
-        # 直下に入ってる場合でパスを調整する処理が必要だけど、
-        # ここでは「ZIP直下にexeたちがある」あるいは「中身を全部現在の場所にぶちまける」前提で書きますの。
-        
         # 3. アップデーターバッチファイルの作成
-        # 現在のexeの場所
         current_exe = sys.executable
         current_dir = os.path.dirname(current_exe)
         
-        # バッチファイルの内容
-        # ping localhost で数秒待機させてから、moveで上書きして、最後にアプリを再起動
-        bat_content = f"""
-        @echo off
-        title Updating...
-        echo Waiting for the application to close...
-        ping 127.0.0.1 -n 3 > nul
+        # バッチファイルのコマンドをリストで構築
+        commands = [
+            "@echo off",
+            "title Updating...",
+            "echo Waiting for the application to close...",
+            "ping 127.0.0.1 -n 3 > nul",  # アプリ終了待ち
+        ]
+
+        # パスを絶対パスに変換（バッチでのトラブル防止）
+        extract_dir_abs = os.path.abspath(extract_dir)
+        current_dir_abs = os.path.abspath(current_dir)
+
+        # ▼▼▼ 1. webフォルダの同期（ミラーリング） ▼▼▼
+        # 新しいZIPに 'web' フォルダがある場合のみ実行
+        if os.path.exists(os.path.join(extract_dir, "web")):
+            commands.append("echo Syncing web folder...")
+            # robocopy /MIR ... フォルダを完全同期（古いファイルは削除される）
+            # /NFL /NDL /NJH /NJS ... ログを抑制して画面を綺麗に
+            cmd = f'robocopy "{extract_dir_abs}\\web" "{current_dir_abs}\\web" /MIR /NFL /NDL /NJH /NJS'
+            commands.append(cmd)
+            # robocopyは成功時にエラーコード1などを返す仕様なので、エラー判定をリセットする
+            commands.append("if %ERRORLEVEL% LEQ 8 set ERRORLEVEL=0")
+
+        # ▼▼▼ 2. Pythonランタイムフォルダの入替 ▼▼▼
+        # 新しいZIPに 'python-x.x.x...' フォルダが含まれているかチェック
+        has_new_python = any(f.startswith("python-") and os.path.isdir(os.path.join(extract_dir, f)) for f in os.listdir(extract_dir))
         
-        echo Updating files...
-        xcopy /E /Y "{extract_dir}\\*" "{current_dir}\\"
+        if has_new_python:
+            commands.append("echo Updating Python runtime...")
+            # 現在のフォルダにある 'python-*' というフォルダを全て削除
+            commands.append(f'for /d %%i in ("{current_dir_abs}\\python-*") do rmdir /S /Q "%%i"')
         
-        echo Restarting application...
-        start "" "{current_exe}"
+        # ▼▼▼ 3. 特定ファイルの削除チェック (app.py, start.vbs) ▼▼▼
+        # 新しいZIPにこれらのファイルが入っていなければ、古い方を削除する
+        check_files = ["app.py", "start.vbs"]
         
-        del "%~f0"
-        """
-        
+        for filename in check_files:
+            if not os.path.exists(os.path.join(extract_dir, filename)):
+                # 新しい方に無いなら、古い方を消すコマンドを追加
+                commands.append(f'if exist "{current_dir_abs}\\{filename}" del /F /Q "{current_dir_abs}\\{filename}"')
+
+        # ▼▼▼ 4. 全ファイルの統合コピー（上書き） ▼▼▼
+        # webフォルダなどはrobocopyで済みだが、念のため全体を上書きコピーして確実に最新にする
+        # （robocopyで消したくない 'temp_audio' などのユーザーデータはこのコマンドでは消えないので安全）
+        commands.append("echo Updating all files...")
+        commands.append(f'xcopy /E /Y "{extract_dir_abs}\\*" "{current_dir_abs}\\"')
+
+        # 5. 再起動処理
+        commands.append("echo Restarting application...")
+        commands.append(f'start "" "{current_exe}"')
+        commands.append('del "%~f0"') # バッチ自身を削除
+
+        # バッチファイルを書き込み
+        bat_content = "\n".join(commands)
         bat_path = os.path.join(current_dir, "updater.bat")
-        with open(bat_path, "w", encoding="cp932") as f: # Windowsのコマンドプロンプト用なのでcp932
+        
+        with open(bat_path, "w", encoding="cp932") as f:
             f.write(bat_content)
 
-        eel.js_log("更新準備完了。再起動しますの！")
+        eel.js_log("更新準備完了。再起動します。")
         
-        # 4. バッチ起動して自分は死ぬ
+        # バッチ起動して終了
         subprocess.Popen([bat_path], shell=True)
         time.sleep(1)
         sys.exit(0)
@@ -408,7 +446,8 @@ def perform_update(download_url):
     except Exception as e:
         eel.js_log(f"更新エラー: {e}")
         return False
-    
+
+
 @eel.expose
 def get_version():
     """現在のバージョンを返す"""
