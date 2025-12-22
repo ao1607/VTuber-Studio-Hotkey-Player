@@ -24,7 +24,7 @@ import glob
 import requests
 from packaging import version
 
-CURRENT_VERSION = "v2.3.1"
+CURRENT_VERSION = "v2.3.2"
 REPO_OWNER = "ao1607"
 REPO_NAME = "VTube-Studio-Hotkey-Player"
 
