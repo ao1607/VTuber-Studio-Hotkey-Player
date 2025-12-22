@@ -15,7 +15,7 @@ Windows・VTube Studio向けのホットキー押下ユーティリティです�
 - `eel`, `keyboard`, `pygetwindow`, `bottle` など（`requirements.txt` を参照）
 - Windows10以降で動作確認済み（ファイルダイアログは PowerShell を使用）
 
-※ リリースにはpython3.12.4の組み込み版を同梱しています。
+※ リリースにはpython3.12.8の組み込み版を同梱しています。
 
 ## 使い方
 1) **音声を選択**: 「音声を選択する」→ WaveSurfer に波形が表示されます  
