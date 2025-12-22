@@ -48,8 +48,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     loadSettings();
-
-
+    initVersion();
+    
     document.addEventListener('contextmenu', (e) => {
         e.preventDefault();
     });
@@ -781,7 +781,7 @@ function toggleModalInput() {
     } else {
         keyDiv.style.pointerEvents = 'auto'; // 操作を許可
         keyDiv.style.opacity = 1;
-        keyDiv.setAttribute('data-placeholder', 'キーを押すのですの');
+        keyDiv.setAttribute('data-placeholder', 'キーを押してください...');
         keyDiv.focus();
     }
 }
@@ -941,3 +941,167 @@ document.getElementById('modal-settings').addEventListener('click', (e) => {
         closeSettingsModal();
     }
 });
+
+
+// --- アップデート関連 ---
+
+let pendingUpdateUrl = ""; // 更新用URLを一時保存する場所
+
+// 1. 更新チェックボタンが押されたら呼ばれる関数
+// main.js の checkUpdate 関数
+
+async function checkUpdate() {
+    const modal = document.getElementById('modal-update');
+    
+    const msgEl = document.getElementById('update-message');
+    const curVerEl = document.getElementById('disp-current-ver');
+    const latVerEl = document.getElementById('disp-latest-ver');
+    const arrowEl = document.getElementById('version-arrow');
+    const logEl = document.getElementById('update-changelog');
+    const btnUpdate = document.getElementById('btn-do-update');
+    
+    // SVGアイコンの定義（見やすいようにサイズは24pxにしましたの）
+    const SVG_ARROW = `
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="12" x2="19" y2="12"></line>
+            <polyline points="12 5 19 12 12 19"></polyline>
+        </svg>`;
+        
+    const SVG_EQUAL = `
+        <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="5" y1="9" x2="19" y2="9"></line>
+            <line x1="5" y1="15" x2="19" y2="15"></line>
+        </svg>`;
+
+    // --- UI初期化 ---
+    modal.style.display = 'flex';
+    msgEl.innerText = "GitHubを確認しています...";
+    msgEl.style.color = "#ccc";
+    
+    curVerEl.innerText = "-";
+    latVerEl.innerText = "-";
+    latVerEl.style.color = "#888";
+    
+    // 初期状態は非表示
+    arrowEl.style.display = 'none';
+    arrowEl.innerHTML = ""; 
+
+    logEl.style.display = 'none';
+    logEl.innerText = "";
+    btnUpdate.style.display = 'none';
+    pendingUpdateUrl = "";
+
+    // --- Pythonへ問い合わせ ---
+    let result = await eel.check_for_updates()();
+
+    // 結果判定
+    if (result.error) {
+        msgEl.innerText = "エラーが発生しました";
+        msgEl.style.color = "#f38ba8";
+        latVerEl.innerText = "Error";
+        return;
+    }
+
+    curVerEl.innerText = result.current_version;
+
+    // 真ん中の記号を表示
+    arrowEl.style.display = 'flex';
+    arrowEl.style.alignItems = 'center';
+    arrowEl.style.justifyContent = 'center';
+
+    if (result.update_available) {
+        // ★更新がある場合
+        msgEl.innerText = "新しいバージョンがあります！";
+        msgEl.style.color = "#a6e3a1"; // 緑
+
+        latVerEl.innerText = result.latest_version;
+        latVerEl.style.color = "#a6e3a1"; 
+
+        // 矢印SVGを表示（色は少し目立つ青）
+        arrowEl.innerHTML = SVG_ARROW;
+        arrowEl.style.color = "#89b4fa"; 
+
+        logEl.innerText = result.body;
+        logEl.style.display = 'block';
+
+        if (result.download_url) {
+            pendingUpdateUrl = result.download_url;
+            btnUpdate.style.display = 'block';
+        }
+    } else {
+        // ★最新の場合
+        msgEl.innerText = "現在は最新版です";
+        msgEl.style.color = "#89b4fa"; // 青
+
+        latVerEl.innerText = result.current_version; 
+        latVerEl.style.color = "#89b4fa"; 
+        
+        // イコールSVGを表示（色は控えめなグレー）
+        arrowEl.innerHTML = SVG_EQUAL;
+        arrowEl.style.color = "#666"; 
+    }
+}
+
+// 2. 「今すぐ更新」ボタンが押されたら呼ばれる関数
+async function executeUpdate() {
+    if (!pendingUpdateUrl) return;
+
+    const btn = document.getElementById('btn-do-update');
+    const msgEl = document.getElementById('update-message');
+    
+    if (!confirm("アプリを更新して再起動します。\nよろしいですか？")) {
+        return;
+    }
+
+    // ボタンを無効化してロード中に
+    btn.disabled = true;
+    btn.innerText = "ダウンロード中...";
+    msgEl.innerText = "更新データをダウンロードしていますの...\n終わったら自動で再起動しますの。";
+
+    // 更新実行
+    await eel.perform_update(pendingUpdateUrl)();
+}
+
+// 3. モーダルを閉じる関数
+function closeUpdateModal() {
+    document.getElementById('modal-update').style.display = 'none';
+}
+
+// モーダル背景クリックで閉じる（お好みで追加）
+document.getElementById('modal-update').addEventListener('click', (e) => {
+    if (e.target.id === 'modal-update') {
+        closeUpdateModal();
+    }
+});
+
+
+// ログ出力用ヘルパー（既存のログ機能を使う前提）
+function logToDiv(msg) {
+    // もし既存のログ関数があればそれを使ってくださいですの
+    // なければコンソールへ
+    if (window.eel && window.eel.js_log) {
+        // Pythonからの呼び出し用関数があるなら何もしない（循環するから）
+        // ここでは単純に画面に表示するロジックを書くか、console.log
+        console.log(msg);
+        // 簡易的にログボックスへ追記する場合:
+        const logBox = document.getElementById('log-box');
+        if(logBox) {
+            const div = document.createElement('div');
+            div.textContent = `[System] ${msg}`;
+            logBox.appendChild(div);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+    }
+}
+
+
+async function initVersion() {
+    // Pythonの get_version() を呼ぶ
+    let ver = await eel.get_version()();
+    
+    // HTMLの要素にセット
+    let label = document.getElementById('version-label');
+    if (label) {
+        label.innerText = ver;
+    }
+}

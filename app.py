@@ -20,6 +20,13 @@ import subprocess
 import bottle
 import time
 
+import requests
+from packaging import version
+
+CURRENT_VERSION = "v2.2.1" 
+REPO_OWNER = "ao1607"
+REPO_NAME = "VTube-Studio-Hotkey-Player"
+
 eel.init('web')
 
 
@@ -297,6 +304,115 @@ def focus_window_py():
             win.activate()
     except:
         pass
+
+
+
+@eel.expose
+def check_for_updates():
+    """
+    GitHubから最新バージョンを確認する
+    戻り値: { "update_available": bool, "latest_version": str, "url": str, "body": str }
+    """
+    try:
+        api_url = f"https://api.github.com/repos/{REPO_OWNER}/{REPO_NAME}/releases/latest"
+        response = requests.get(api_url, timeout=5)
+        
+        if response.status_code == 200:
+            data = response.json()
+            latest_tag = data.get("tag_name", "v0.0.0")
+            
+            # バージョン比較 (v1.0.0 などを解析して比較)
+            if version.parse(latest_tag) > version.parse(CURRENT_VERSION):
+                return {
+                    "update_available": True,
+                    "current_version": CURRENT_VERSION,
+                    "latest_version": latest_tag,
+                    "url": data.get("html_url"),
+                    "body": data.get("body", ""),
+                    # zipのDLリンクを探す (assetsの最初のzipを取得する簡易実装)
+                    "download_url": next((asset["browser_download_url"] for asset in data["assets"] if asset["name"].endswith(".zip")), None)
+                }
+            else:
+                return {"update_available": False, "current_version": CURRENT_VERSION}
+    except Exception as e:
+        print(f"Update Check Error: {e}")
+        return {"error": str(e)}
+    
+    return {"update_available": False}
+
+@eel.expose
+def perform_update(download_url):
+    """
+    更新を実行する（DL -> 解凍 -> bat作成 -> 再起動）
+    """
+    if not download_url:
+        return False
+
+    try:
+        eel.js_log("最新版をダウンロードしていますの...")
+        
+        # 1. ZIPをダウンロード
+        response = requests.get(download_url, stream=True)
+        zip_path = os.path.join(TEMP_DIR, "update.zip")
+        
+        with open(zip_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+
+        # 2. 解凍先（一時フォルダ）
+        extract_dir = os.path.join(TEMP_DIR, "update_extracted")
+        if os.path.exists(extract_dir):
+            shutil.rmtree(extract_dir)
+        os.makedirs(extract_dir)
+
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            zf.extractall(extract_dir)
+
+        # ZIPの中身がフォルダに入ってる場合（フォルダ/exe...）と、
+        # 直下に入ってる場合でパスを調整する処理が必要だけど、
+        # ここでは「ZIP直下にexeたちがある」あるいは「中身を全部現在の場所にぶちまける」前提で書きますの。
+        
+        # 3. アップデーターバッチファイルの作成
+        # 現在のexeの場所
+        current_exe = sys.executable
+        current_dir = os.path.dirname(current_exe)
+        
+        # バッチファイルの内容
+        # ping localhost で数秒待機させてから、moveで上書きして、最後にアプリを再起動
+        bat_content = f"""
+        @echo off
+        title Updating...
+        echo Waiting for the application to close...
+        ping 127.0.0.1 -n 3 > nul
+        
+        echo Updating files...
+        xcopy /E /Y "{extract_dir}\\*" "{current_dir}\\"
+        
+        echo Restarting application...
+        start "" "{current_exe}"
+        
+        del "%~f0"
+        """
+        
+        bat_path = os.path.join(current_dir, "updater.bat")
+        with open(bat_path, "w", encoding="cp932") as f: # Windowsのコマンドプロンプト用なのでcp932
+            f.write(bat_content)
+
+        eel.js_log("更新準備完了。再起動しますの！")
+        
+        # 4. バッチ起動して自分は死ぬ
+        subprocess.Popen([bat_path], shell=True)
+        time.sleep(1)
+        sys.exit(0)
+
+    except Exception as e:
+        eel.js_log(f"更新エラー: {e}")
+        return False
+    
+@eel.expose
+def get_version():
+    """現在のバージョンを返す"""
+    return CURRENT_VERSION
 
 # --- Main ---
 if __name__ == "__main__":

@@ -939,3 +939,20 @@ input:focus + .slider {
     width: 600px;       /* 好きな幅にするのですの（デフォルトはたぶん400pxくらい？） */
     max-width: 90vw;    /* 画面からはみ出さないようにする保険 */
 }
+
+
+/* ▼▼▼ アップデート履歴の表示エリア ▼▼▼ */
+.update-log {
+    background: #111;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 10px;
+    height: 200px;         /* 高さを固定 */
+    overflow-y: auto;      /* 長い場合はスクロール */
+    font-size: 0.9rem;
+    color: #ccc;
+    white-space: pre-wrap; /* 改行をそのまま表示 */
+    font-family: 'Consolas', monospace;
+    margin-bottom: 15px;
+    text-align: left;
+}
