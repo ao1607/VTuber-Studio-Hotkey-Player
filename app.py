@@ -23,7 +23,7 @@ import time
 import requests
 from packaging import version
 
-CURRENT_VERSION = "v2.4.0"
+CURRENT_VERSION = "v2.4.1"
 REPO_OWNER = "ao1607"
 REPO_NAME = "VTube-Studio-Hotkey-Player"
 
@@ -128,9 +128,27 @@ def _temp_audio_path_from_rel(rel_path: str) -> str:
 
 def _show_powershell_dialog(cmd):
     """PowerShellダイアログヘルパー"""
+    owner_script = """
+    function New-TopMostDialogOwner {
+        $d = New-Object System.Windows.Forms.Form;
+        $d.TopMost = $true;
+        $d.ShowInTaskbar = $false;
+        $d.StartPosition = 'Manual';
+        $d.Width = 1;
+        $d.Height = 1;
+        $d.Left = -32000;
+        $d.Top = -32000;
+        $d.Opacity = 0.01;
+        $d.Show();
+        $d.TopMost = $true;
+        $d.Activate();
+        $d.BringToFront();
+        return $d;
+    }
+    """
     ps_cmd = [
         "powershell", "-noprofile", "-Sta", "-command", 
-        f"Add-Type -AssemblyName System.Windows.Forms; {cmd}"
+        f"Add-Type -AssemblyName System.Windows.Forms; {owner_script} {cmd}"
     ]
     try:
         startupinfo = subprocess.STARTUPINFO()
@@ -151,12 +169,13 @@ def select_audio_file():
     $f = New-Object System.Windows.Forms.OpenFileDialog;
     $f.Filter = 'Audio Files (*.wav;*.mp3;*.ogg;*.m4a)|*.wav;*.mp3;*.ogg;*.m4a|All Files (*.*)|*.*';
     $f.Title = '音声ファイルを選択してくれですの';
-    $d = New-Object System.Windows.Forms.Form;
-    $d.TopMost = $true;
-    $d.Opacity = 0;
-    $d.ShowInTaskbar = $false;
+    $d = New-TopMostDialogOwner;
+    try {
         if ($f.ShowDialog($d) -eq [System.Windows.Forms.DialogResult]::OK) { Write-Host $f.FileName }
-    $d.Dispose();
+    } finally {
+        $d.Close();
+        $d.Dispose();
+    }
     """
     original_path = _show_powershell_dialog(cmd)
     
