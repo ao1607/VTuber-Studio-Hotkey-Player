@@ -8,3 +8,4 @@ VTS_Player_pack
 *.zip
 python-*
 start.vbs
+__pycache__

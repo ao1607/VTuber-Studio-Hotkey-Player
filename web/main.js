@@ -3,10 +3,6 @@ let totalDuration = 0;
 let wavesurfer = null; // 波形表示用の WaveSurfer インスタンス
 let wsRegions = null; // WaveSurfer Regions プラグインインスタンス
 
-// 再生状態管理フラグ
-let isPlaying = false; // 再生中かどうかのフラグ
-let isPaused = false;  // 一時停止中かどうかのフラグ
-let pausedAt = 0;    // 一時停止した時刻（再開時に使用）
 let nextEventIndex = 0; // 次に発火すべきイベントのインデックス
 
 
@@ -19,6 +15,16 @@ let appConfig = {
 };
 
 
+
+function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, (char) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[char]));
+}
 
 function updateNextEventIndex() {
     const currentTime = wavesurfer.getCurrentTime();
@@ -242,8 +248,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // 設定モーダルが出ていたら閉じる
+            const settingsModal = document.getElementById('modal-settings');
             if (settingsModal && settingsModal.style.display !== 'none') {
                 closeSettingsModal();
+                e.preventDefault();
+                return;
+            }
+
+            // 更新モーダルが出ていたら閉じる
+            const updateModal = document.getElementById('modal-update');
+            if (updateModal && updateModal.style.display !== 'none') {
+                closeUpdateModal();
                 e.preventDefault();
                 return;
             }
@@ -466,7 +481,7 @@ function js_log(msg) {
     line.innerHTML = `
         <span class="log-prompt">></span>
         <span class="log-time">[${timeStr}]</span>
-        <span>${msg}</span>
+        <span>${escapeHtml(msg)}</span>
     `;
     
     box.appendChild(line);
@@ -492,6 +507,12 @@ function set_update_progress_js(percent, message) {
     }
 }
 
+
+eel.expose(close_window_js);
+function close_window_js() {
+    window.close();
+}
+
 // --- UI操作 ---
 
 async function executeUpdate() {
@@ -508,19 +529,30 @@ async function executeUpdate() {
     // UIを更新モードに切り替え
     btn.disabled = true;
     btn.style.display = 'none'; // ボタンを消す
-    document.querySelector('.btn-cancel').style.display = 'none'; // 閉じるボタンも消す（中断不可）
+    const cancelBtn = document.querySelector('#modal-update .btn-cancel');
+    if (cancelBtn) cancelBtn.style.display = 'none'; // 閉じるボタンも消す（中断不可）
 
     msgEl.innerText = "更新を実行中ですの...";
 
     if (progressArea) {
         progressArea.style.display = 'block';
     }
-    
-    // プログレスバーを表示
-    progressArea.style.display = 'block';
-    
-    // 更新実行
-    await eel.perform_update(pendingUpdateUrl)();
+
+    try {
+        const result = await eel.perform_update(pendingUpdateUrl)();
+        if (result === false) {
+            msgEl.innerText = "更新に失敗しました";
+            btn.disabled = false;
+            btn.style.display = 'block';
+            if (cancelBtn) cancelBtn.style.display = '';
+        }
+    } catch (e) {
+        js_log("更新エラー: " + e);
+        msgEl.innerText = "更新に失敗しました";
+        btn.disabled = false;
+        btn.style.display = 'block';
+        if (cancelBtn) cancelBtn.style.display = '';
+    }
 }
 
 async function pickAudio() {
@@ -562,15 +594,26 @@ let data = await eel.load_bundle()();
     
 if (data) {
         const statusEl = document.getElementById('audio-status');
-        const fileName = data.audio_path.split('\\').pop().split('/').pop();
+        const fileName = data.audio_name || data.audio_path.split('\\').pop().split('/').pop();
         
         statusEl.textContent = fileName;
         statusEl.title = data.audio_path;
         statusEl.classList.add('active');
         statusEl.dataset.fullPath = data.audio_path;
 
-        events = data.events;
-        events.forEach(e => e.time = parseFloat(e.time));
+        events = Array.isArray(data.events)
+            ? data.events
+                .filter(e => e && typeof e === 'object')
+                .map(e => {
+                    const eventType = e.type === 'pause' ? 'pause' : 'press';
+                    return {
+                        time: parseFloat(e.time),
+                        type: eventType,
+                        key: eventType === 'pause' ? '' : String(e.key || '')
+                    };
+                })
+                .filter(e => Number.isFinite(e.time))
+            : [];
         renderEvents();
         js_log("Bundle Loaded");
 
@@ -598,7 +641,7 @@ function addEvent() {
     events.push({
         time: parseFloat(t),
         type: type,
-        key: key
+        key: type === 'pause' ? '' : key
     });
     
     // 時間順にソート
@@ -625,13 +668,13 @@ function renderEvents() {
         // 'press' か 'pause' かでクラスを分ける
         const typeClass = ev.type === 'pause' ? 'pause' : 'press';
         // HTMLを作成
-        const typeHTML = `<span class="type-badge ${typeClass}">${ev.type}</span>`;
+        const typeHTML = `<span class="type-badge ${typeClass}">${escapeHtml(ev.type || '')}</span>`;
         
         // ▼▼▼ 2. Keyをバッジにする処理（さっきのまま） ▼▼▼
         let keyHTML = '-';
         if (ev.key) {
             // "Ctrl+Shift+A" を分解して spanタグの連なりにする
-            keyHTML = ev.key.split('+').map(k => {
+            keyHTML = String(ev.key).split('+').map(k => {
                 let cls = 'kbd-badge';
                 // 色分けクラスの付与
                 const lower = k.toLowerCase();
@@ -639,7 +682,7 @@ function renderEvents() {
                 if (lower.includes('shift')) cls += ' shift';
                 if (lower.includes('alt')) cls += ' alt';
                 
-                return `<span class="${cls}">${k}</span>`;
+                return `<span class="${cls}">${escapeHtml(k)}</span>`;
             }).join(''); // 文字列として結合
         }
 
@@ -969,14 +1012,6 @@ function updateSettings(key) {
         // 即時反映 (v7のsetOptionsを使用)
         wavesurfer.setOptions({ autoCenter: val });
     }
-    else if (key === 'height') {
-        const val = parseInt(document.getElementById('set-height').value);
-        appConfig.waveHeight = val;
-        document.getElementById('val-height').innerText = val + "px";
-        // 即時反映
-        wavesurfer.setOptions({ height: val });
-    }
-
     // 変更があるたびに保存
     saveSettings();
 }

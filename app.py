@@ -19,18 +19,13 @@ from pathlib import Path
 import subprocess
 import bottle
 import time
-import glob
 
 import requests
 from packaging import version
 
-CURRENT_VERSION = "v2.3.2"
+CURRENT_VERSION = "v2.4.0"
 REPO_OWNER = "ao1607"
 REPO_NAME = "VTube-Studio-Hotkey-Player"
-
-eel.init('web')
-
-
 
 class PrintToJsLogger(object):
     def __init__(self):
@@ -111,6 +106,26 @@ def _copy_to_web_temp(src_path: str) -> str:
         print(f"Copy Error: {e}")
         return ""
 
+def _safe_extract_zip(zf: zipfile.ZipFile, dest_dir: str):
+    """Zip Slipを避けてZIPを展開する"""
+    dest_dir_abs = os.path.abspath(dest_dir)
+
+    for member in zf.infolist():
+        member_path = os.path.abspath(os.path.join(dest_dir_abs, member.filename))
+        if os.path.commonpath([dest_dir_abs, member_path]) != dest_dir_abs:
+            raise ValueError(f"安全でないZIP内パスです: {member.filename}")
+
+    zf.extractall(dest_dir_abs)
+
+def _safe_archive_name(path: str) -> str:
+    """バンドル内に保存してよいファイル名だけを取り出す"""
+    normalized = str(path or "").replace("\\", "/").rstrip("/")
+    return os.path.basename(normalized)
+
+def _temp_audio_path_from_rel(rel_path: str) -> str:
+    """Eelへ返した temp_audio/... から実ファイルパスを復元する"""
+    return os.path.join(TEMP_DIR, os.path.basename(rel_path))
+
 def _show_powershell_dialog(cmd):
     """PowerShellダイアログヘルパー"""
     ps_cmd = [
@@ -168,11 +183,19 @@ def save_bundle(data_json):
     path = _show_powershell_dialog(cmd)
     if not path or not STATE["audio_path"]: return
     
-    data = json.loads(data_json)
     try:
+        audio_path = STATE["audio_path"]
+        if not os.path.isfile(audio_path):
+            eel.js_log(f"保存エラー: 音声ファイルが見つかりません: {audio_path}")
+            return
+
+        data = json.loads(data_json)
+        archive_audio_name = os.path.basename(audio_path)
+        data["audio_file"] = archive_audio_name
+
         with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
             zf.writestr("timeline.json", json.dumps(data, indent=4))
-            zf.write(STATE["audio_path"], arcname=os.path.basename(STATE["audio_path"]))
+            zf.write(audio_path, arcname=archive_audio_name)
         eel.js_log(f"保存しました: {path}")
     except Exception as e:
         eel.js_log(f"保存エラー: {e}")
@@ -196,23 +219,24 @@ def load_bundle():
     try:
         with tempfile.TemporaryDirectory() as extract_dir:
             with zipfile.ZipFile(path, 'r') as zf:
-                zf.extractall(extract_dir)
                 if "timeline.json" not in zf.namelist():
                     eel.js_log("エラー: timeline.jsonが見つかりません")
                     return None
+
+                _safe_extract_zip(zf, extract_dir)
                 
                 timeline_path = os.path.join(extract_dir, "timeline.json")
                 with open(timeline_path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 
-                audio_filename = data.get("audio_file")
+                audio_filename = _safe_archive_name(data.get("audio_file"))
                 extracted_audio_path = ""
                 if audio_filename:
                     extracted_audio_path = os.path.join(extract_dir, audio_filename)
                 
                 if not extracted_audio_path or not os.path.exists(extracted_audio_path):
                     for f in os.listdir(extract_dir):
-                        if f.endswith(('.wav', '.mp3', '.ogg')):
+                        if f.lower().endswith(('.wav', '.mp3', '.ogg', '.m4a')):
                             extracted_audio_path = os.path.join(extract_dir, f)
                             break
                 
@@ -221,11 +245,16 @@ def load_bundle():
                     return None
                 
                 rel_path = _copy_to_web_temp(extracted_audio_path)
-                final_audio_path = os.path.join(TEMP_DIR, os.path.basename(extracted_audio_path))
+                if not rel_path:
+                    eel.js_log("エラー: 音声ファイルのコピーに失敗しました")
+                    return None
+
+                final_audio_path = _temp_audio_path_from_rel(rel_path)
                 STATE["audio_path"] = final_audio_path
                 
                 return {
                     "audio_path": final_audio_path,
+                    "audio_name": os.path.basename(extracted_audio_path),
                     "rel_path": rel_path,
                     "events": data.get("events", [])
                 }
@@ -380,27 +409,6 @@ def get_version():
     """現在のバージョンを返す"""
     return CURRENT_VERSION
 
-# --- Main ---
-if __name__ == "__main__":
-    # ▼▼▼ 3. initの場所を修正するのですの！ ▼▼▼
-    # webフォルダの正しいパスを取得して指定
-    eel.init(resource_path('web'))
-    
-    # Chromeの起動オプション
-    chrome_flags = [
-        '--disable-extensions',
-        '--disable-plugins',
-        '--incognito',
-        '--no-first-run',
-        '--no-default-browser-check'
-    ]
-    @bottle.route('/temp_audio/<filename>')
-    def serve_temp_audio(filename):
-        # TEMP_DIR からファイルを直接探して返す最強の命令ですの
-        return bottle.static_file(filename, root=TEMP_DIR)
-
-    eel.start('index.html', size=(900, 650), cmdline_args=chrome_flags, port=0)
-
 
 # app.py の perform_update 関数を書き換え
 
@@ -417,7 +425,8 @@ def perform_update(download_url):
         eel.set_update_progress_js(0, "接続中...")
 
         # 1. ZIPダウンロード（進捗計算付き）
-        response = requests.get(download_url, stream=True)
+        response = requests.get(download_url, stream=True, timeout=30)
+        response.raise_for_status()
         total_length = response.headers.get('content-length') # 全サイズ取得
         
         zip_path = os.path.join(TEMP_DIR, "update.zip")
@@ -430,6 +439,8 @@ def perform_update(download_url):
             total_length = int(total_length)
             with open(zip_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
+                    if not chunk:
+                        continue
                     dl += len(chunk)
                     f.write(chunk)
                     
@@ -447,13 +458,12 @@ def perform_update(download_url):
         os.makedirs(extract_dir)
 
         with zipfile.ZipFile(zip_path, 'r') as zf:
-            zf.extractall(extract_dir)
+            _safe_extract_zip(zf, extract_dir)
 
         # 3. アップデーターバッチ作成
         eel.set_update_progress_js(100, "更新プログラムを作成中...")
 
         current_exe = sys.executable 
-        current_dir = os.path.dirname(current_exe)
         script_path = os.path.abspath(__file__)
         app_root_dir = os.path.dirname(script_path)
         
@@ -470,10 +480,10 @@ def perform_update(download_url):
         commands = [
             "@echo off",
             "title Updating...",
+            "echo Waiting for parent to exit...",
+            "ping 127.0.0.1 -n 4 > nul",
             f"echo Closing old process (PID: {pid})...",
-            f"taskkill /PID {pid} /F /T",
-            "echo Waiting for release...",
-            "ping 127.0.0.1 -n 3 > nul",
+            f"taskkill /PID {pid} /F",
         ]
 
         if os.path.exists(os.path.join(extract_dir, "web")):
@@ -488,23 +498,57 @@ def perform_update(download_url):
 
         commands.append("echo Restarting application...")
         commands.append(f'start "" "{pythonw_exe}" "{script_path}"')
-        commands.append('start /b "" cmd /c "ping -n 2 127.0.0.1 > nul & del "%~f0""') 
+        commands.append('del "%~f0"')
         commands.append('exit')
         # --------------------------------------
 
         bat_content = "\n".join(commands)
         bat_path = os.path.join(app_root_dir, "updater.bat")
-        
+
         with open(bat_path, "w", encoding="cp932") as f:
             f.write(bat_content)
 
         eel.set_update_progress_js(100, "再起動しますの！さようなら...")
         time.sleep(1) # ユーザーがメッセージを読む時間を少しだけ作る
 
-        subprocess.Popen([bat_path], shell=True)
+        creationflags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0x00000010)
+        subprocess.Popen(["cmd", "/c", bat_path], creationflags=creationflags)
+
+        # ブラウザに「閉じろ」と命令
+        try:
+            eel.close_window_js()
+        except:
+            pass
+
+        # ブラウザが閉じる処理をする時間もちゃんと待ってあげる
+        time.sleep(0.5)
+
+        # 思い残すことはない...さらば！
+        sys.exit(0)
 
     except Exception as e:
         # エラー時はアラートを出すなどの処理を入れてもいいかも
         eel.js_log(f"更新エラー: {e}")
         eel.set_update_progress_js(0, f"エラー: {e}")
         return False
+
+# --- Main ---
+if __name__ == "__main__":
+    # ▼▼▼ 3. initの場所を修正するのですの！ ▼▼▼
+    # webフォルダの正しいパスを取得して指定
+    eel.init(resource_path('web'))
+
+    # Chromeの起動オプション
+    chrome_flags = [
+        '--disable-extensions',
+        '--disable-plugins',
+        '--incognito',
+        '--no-first-run',
+        '--no-default-browser-check'
+    ]
+    @bottle.route('/temp_audio/<filename>')
+    def serve_temp_audio(filename):
+        # TEMP_DIR からファイルを直接探して返す最強の命令ですの
+        return bottle.static_file(filename, root=TEMP_DIR)
+
+    eel.start('index.html', size=(900, 650), cmdline_args=chrome_flags, port=0)

@@ -2,3 +2,5 @@ keyboard
 pygetwindow
 eel
 bottle
+requests
+packaging
