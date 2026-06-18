@@ -14,6 +14,7 @@ import keyboard
 import shutil
 import tempfile
 import zipfile
+import ctypes
 import pygetwindow as gw
 from pathlib import Path
 import subprocess
@@ -23,9 +24,10 @@ import time
 import requests
 from packaging import version
 
-CURRENT_VERSION = "v2.4.1"
+CURRENT_VERSION = "v2.4.2"
 REPO_OWNER = "ao1607"
 REPO_NAME = "VTube-Studio-Hotkey-Player"
+VTUBE_STUDIO_TITLE = "VTube Studio"
 
 class PrintToJsLogger(object):
     def __init__(self):
@@ -297,6 +299,154 @@ def update_key_duration_py(duration):
         pass
 
 
+def _find_vtube_studio_hwnd():
+    """VTube Studioのトップレベルウィンドウハンドルを探す"""
+    try:
+        user32 = ctypes.windll.user32
+        own_pid = os.getpid()
+        title_keyword = VTUBE_STUDIO_TITLE.lower()
+        excluded_title_markers = (
+            "hotkey player",
+            "vtube-studio-hotkey-player",
+            "vts hotkey",
+        )
+
+        EnumWindows = user32.EnumWindows
+        EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+        GetWindowTextLengthW = user32.GetWindowTextLengthW
+        GetWindowTextW = user32.GetWindowTextW
+        IsWindowVisible = user32.IsWindowVisible
+        GetWindowThreadProcessId = user32.GetWindowThreadProcessId
+
+        matches = []
+
+        def foreach(hwnd, l_param):
+            try:
+                if not IsWindowVisible(hwnd):
+                    return True
+
+                length = GetWindowTextLengthW(hwnd)
+                if length == 0:
+                    return True
+
+                buf = ctypes.create_unicode_buffer(length + 1)
+                GetWindowTextW(hwnd, buf, length + 1)
+                title = buf.value
+                title_lower = title.lower()
+
+                if title_keyword not in title_lower:
+                    return True
+                if any(marker in title_lower for marker in excluded_title_markers):
+                    return True
+
+                process_id = ctypes.c_ulong()
+                GetWindowThreadProcessId(hwnd, ctypes.byref(process_id))
+                if process_id.value == own_pid:
+                    return True
+
+                matches.append((int(hwnd), title))
+            except Exception:
+                pass
+            return True
+
+        EnumWindows(EnumWindowsProc(foreach), 0)
+
+        if matches:
+            exact = [match for match in matches if match[1].strip().lower() == title_keyword]
+            return (exact or matches)[0][0]
+    except Exception as e:
+        print(f"VTube window search error: {e}")
+
+    try:
+        windows = gw.getWindowsWithTitle(VTUBE_STUDIO_TITLE)
+        for win in windows:
+            title = getattr(win, "title", "")
+            if "hotkey player" in title.lower() or "vts hotkey" in title.lower():
+                continue
+            hwnd = getattr(win, "_hWnd", None)
+            if hwnd:
+                return int(hwnd)
+    except Exception as e:
+        print(f"VTube pygetwindow fallback error: {e}")
+
+    return None
+
+
+def _bring_hwnd_to_front(hwnd):
+    """指定HWNDを前面化し、実際にフォアグラウンドになったか返す"""
+    try:
+        user32 = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+
+        SW_RESTORE = 9
+        SW_SHOW = 5
+        HWND_TOPMOST = -1
+        HWND_NOTOPMOST = -2
+        SWP_NOMOVE = 0x0002
+        SWP_NOSIZE = 0x0001
+        SWP_SHOWWINDOW = 0x0040
+        VK_MENU = 0x12
+
+        if user32.IsIconic(hwnd):
+            user32.ShowWindow(hwnd, SW_RESTORE)
+            time.sleep(0.05)
+
+        user32.ShowWindow(hwnd, SW_SHOW)
+
+        foreground_hwnd = user32.GetForegroundWindow()
+        current_thread = kernel32.GetCurrentThreadId()
+        foreground_thread = user32.GetWindowThreadProcessId(foreground_hwnd, None) if foreground_hwnd else 0
+        target_thread = user32.GetWindowThreadProcessId(hwnd, None)
+
+        attached_foreground = False
+        attached_target = False
+        try:
+            if foreground_thread and foreground_thread != current_thread:
+                attached_foreground = bool(user32.AttachThreadInput(foreground_thread, current_thread, True))
+            if target_thread and target_thread != current_thread:
+                attached_target = bool(user32.AttachThreadInput(target_thread, current_thread, True))
+
+            user32.SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
+            user32.BringWindowToTop(hwnd)
+            user32.SetForegroundWindow(hwnd)
+            user32.SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
+        finally:
+            if attached_target:
+                user32.AttachThreadInput(target_thread, current_thread, False)
+            if attached_foreground:
+                user32.AttachThreadInput(foreground_thread, current_thread, False)
+
+        if user32.GetForegroundWindow() != hwnd:
+            user32.keybd_event(VK_MENU, 0, 0, 0)
+            user32.keybd_event(VK_MENU, 0, 2, 0)
+            user32.SetForegroundWindow(hwnd)
+
+        return user32.GetForegroundWindow() == hwnd
+    except Exception as e:
+        print(f"Focus Error: {e}")
+        return False
+
+
+def _focus_vtube_studio(wait_s=0.08):
+    hwnd = _find_vtube_studio_hwnd()
+    if not hwnd:
+        print("VTube Studioのウィンドウが見つかりません")
+        return False
+
+    try:
+        if ctypes.windll.user32.GetForegroundWindow() == hwnd:
+            return True
+    except Exception:
+        pass
+
+    focused = _bring_hwnd_to_front(hwnd)
+    if focused and wait_s > 0:
+        time.sleep(wait_s)
+    elif not focused:
+        print("VTube Studioを前面化できませんでした")
+    return focused
+
+
 
 
 # ▼▼▼ 単純にキーを押すだけの関数 ▼▼▼
@@ -310,6 +460,10 @@ def trigger_hotkey_py(key_str):
     print(f"Triggering: {key_str}") # デバッグ用ログ
     
     if not key_str:
+        return
+
+    if not _focus_vtube_studio(wait_s=0.03):
+        print(f"Hotkey skipped because VTube Studio is not focused: {key_str}")
         return
 
     # 1. キー文字列を分解して正規化
@@ -345,14 +499,7 @@ def trigger_hotkey_py(key_str):
 @eel.expose
 def focus_window_py():
     """再生開始時にVTubeStudioをアクティブにする"""
-    try:
-        windows = gw.getWindowsWithTitle("VTube Studio")
-        if windows:
-            win = windows[0]
-            if win.isMinimized: win.restore()
-            win.activate()
-    except:
-        pass
+    return _focus_vtube_studio(wait_s=0.12)
 
 
 

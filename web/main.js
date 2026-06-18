@@ -720,7 +720,11 @@ async function togglePlayback() {
     } else {
         // 停止中 → 再生
         // 再生開始時にVTubeStudioにフォーカスを当てる
-        eel.focus_window_py()(); 
+        const focused = await eel.focus_window_py()();
+        if (!focused) {
+            js_log("エラー: VTube Studioのウィンドウを前面化できません");
+            return;
+        }
         
         wavesurfer.play();
         updateToggleIcon(true);
